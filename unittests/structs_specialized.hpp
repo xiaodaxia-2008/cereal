@@ -363,7 +363,7 @@ namespace cereal
            cereal::specialization::non_member_load_save_minimal> {};
 }
 
-CEREAL_REGISTER_TYPE(SpecializedMSplitPolymorphic)
+CEREAL_REGISTER_TYPE_TO_ALL_ARCHIVES(SpecializedMSplitPolymorphic)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(BogusBasePolymorphic, SpecializedMSplitPolymorphic)
 
 template <class IArchive, class OArchive> inline

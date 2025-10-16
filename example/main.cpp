@@ -61,18 +61,9 @@ void test_shared_ptr()
     SPDLOG_INFO("node1: {}", *node1);
 }
 
-struct B { 
-    virtual ~B() = default;
-};
-
-struct D : public B { 
-};
-
 int main()
 {
     spdlog::set_level(spdlog::level::debug);
-    constexpr auto n = std::is_empty_v<D>;
-    constexpr auto n2 = sizeof(D);
     test_shared_ptr();
     return 0;
 }

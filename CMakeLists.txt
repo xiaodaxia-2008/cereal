@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.6...3.15)
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
 project(cereal LANGUAGES CXX VERSION 1.3.2)
 
 if(PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -39,7 +43,7 @@ if(UNIX)
 endif()
 
 if(MSVC)
-    add_compile_options(/bigobj /W3 /WX)
+    add_compile_options(/bigobj /W3 /WX /Zc:preprocessor)
 else()
     add_compile_options(-Wall -Wextra -pedantic -Wshadow -Wold-style-cast)
     option(WITH_WERROR "Compile with '-Werror' C++ compiler flag" ON)
@@ -65,19 +69,16 @@ else()
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-add_library(cereal INTERFACE)
+add_library(cereal SHARED src/cereal.cpp)
 add_library(cereal::cereal ALIAS cereal)
-target_include_directories(cereal INTERFACE
+target_include_directories(cereal PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-add_library(cereal_dll SHARED src/cereal.cpp)
-add_library(cereal::cereal_dll ALIAS cereal_dll)
-target_link_libraries(cereal_dll PUBLIC cereal)
-list(APPEND CEREAL_THREAD_LIBS cereal::cereal cereal::cereal_dll)
+list(APPEND CEREAL_THREAD_LIBS cereal::cereal)
 
 if(NOT CMAKE_VERSION VERSION_LESS 3.8)
-    target_compile_features(cereal INTERFACE cxx_std_17)
+    target_compile_features(cereal PUBLIC cxx_std_17)
 endif()
 
 option(CEREAL_INSTALL "Generate the install target" ${CEREAL_MASTER_PROJECT})

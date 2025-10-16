@@ -1,7 +1,7 @@
 include(GenerateExportHeader)
 find_package(spdlog CONFIG REQUIRED)
 
-link_libraries(spdlog::spdlog cereal_dll)
+link_libraries(spdlog::spdlog cereal::cereal)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 add_library(dummy_lib_base SHARED Base.cpp)
