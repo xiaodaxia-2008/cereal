@@ -11,12 +11,14 @@ include(CheckCXXCompilerFlag)
 set(CMAKE_REQUIRED_FLAGS "-m32")
 check_cxx_compiler_flag("-m32" COMPILER_SUPPORT_M32)
 unset(CMAKE_REQUIRED_FLAGS)
+
 if(NOT COMPILER_SUPPORT_M32)
     set(SKIP_PORTABILITY_TEST ON CACHE BOOL "Skip portability (32 bit) tests" FORCE)
 endif()
 
-option(BUILD_DOC "Build documentation" ON)
-option(BUILD_SANDBOX "Build sandbox examples" ON)
+option(BUILD_DOC "Build documentation" OFF)
+option(BUILD_SANDBOX "Build sandbox examples" OFF)
+option(BUILD_EXAMPLE "Build example" OFF)
 option(SKIP_PERFORMANCE_COMPARISON "Skip building performance sandbox comparison (requires boost)" OFF)
 
 # TODO: should not be needed! CK
@@ -24,10 +26,11 @@ if(NOT CMAKE_VERSION VERSION_LESS 3.0) # installing cereal requires INTERFACE li
     option(JUST_INSTALL_CEREAL "Don't do anything besides installing the library" OFF)
 endif()
 
-
 set(CEREAL_THREAD_LIBS)
+
 if(UNIX)
     option(THREAD_SAFE "Use mutexes to ensure thread safety" OFF)
+
     if(THREAD_SAFE)
         message(STATUS "Use mutexes")
         add_definitions(-DCEREAL_THREAD_SAFE=1)
@@ -35,20 +38,22 @@ if(UNIX)
     endif()
 endif()
 
-
 if(MSVC)
     add_compile_options(/bigobj /W3 /WX)
 else()
     add_compile_options(-Wall -Wextra -pedantic -Wshadow -Wold-style-cast)
     option(WITH_WERROR "Compile with '-Werror' C++ compiler flag" ON)
+
     if(WITH_WERROR)
         add_compile_options(-Werror)
     endif()
 
     option(CLANG_USE_LIBCPP "Use libc++ for clang compilation" OFF)
+
     if(APPLE OR CLANG_USE_LIBCPP)
         message(STATUS "Use libc++")
         add_compile_options(-stdlib=libc++)
+
         # TODO: use add_link_options(-stdlib=libc++ -lc++abi") bud this needs cmake 3.13! CK
         set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -stdlib=libc++ -lc++abi")
     endif()
@@ -60,21 +65,23 @@ else()
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
-
 add_library(cereal INTERFACE)
 add_library(cereal::cereal ALIAS cereal)
 target_include_directories(cereal INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-list(APPEND CEREAL_THREAD_LIBS cereal::cereal)
+add_library(cereal_dll SHARED src/cereal.cpp)
+add_library(cereal::cereal_dll ALIAS cereal_dll)
+target_link_libraries(cereal_dll PUBLIC cereal)
+list(APPEND CEREAL_THREAD_LIBS cereal::cereal cereal::cereal_dll)
 
 if(NOT CMAKE_VERSION VERSION_LESS 3.8)
-    target_compile_features(cereal INTERFACE cxx_std_11)
+    target_compile_features(cereal INTERFACE cxx_std_17)
 endif()
 
-
 option(CEREAL_INSTALL "Generate the install target" ${CEREAL_MASTER_PROJECT})
+
 if(CEREAL_INSTALL)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
@@ -91,11 +98,13 @@ if(CEREAL_INSTALL)
         ${configFile}
         INSTALL_DESTINATION ${configInstallDestination}
     )
+
     if(${CMAKE_VERSION} VERSION_GREATER 3.13)
         write_basic_package_version_file("${versionFile}" COMPATIBILITY SameMajorVersion ARCH_INDEPENDENT)
     else()
         write_basic_package_version_file("${versionFile}" COMPATIBILITY SameMajorVersion)
     endif()
+
     configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/${PROJECT_NAME}.pc.in
         ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc
@@ -114,30 +123,30 @@ if(CEREAL_INSTALL)
     )
 endif()
 
-
 if(JUST_INSTALL_CEREAL)
     return()
 endif()
-
 
 if(NOT SKIP_PERFORMANCE_COMPARISON)
     # Boost serialization for performance sandbox
     find_package(Boost REQUIRED COMPONENTS serialization)
 endif()
 
-
 option(BUILD_TESTS "Build tests" ${CEREAL_MASTER_PROJECT})
+
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(unittests)
 endif()
 
-
 if(BUILD_SANDBOX)
     add_subdirectory(sandbox)
 endif()
 
-
 if(BUILD_DOC)
     add_subdirectory(doc)
+endif()
+
+if(BUILD_EXAMPLE)
+    add_subdirectory(example)
 endif()
