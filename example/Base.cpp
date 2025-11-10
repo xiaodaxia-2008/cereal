@@ -2,15 +2,16 @@
 
 #include <cereal/archives/binary.hpp>
 #include <cereal/archives/json.hpp>
+#include <cereal/archives/portable_binary.hpp>
+#include <cereal/archives/xml.hpp>
 #include <cereal/types/memory.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/vector.hpp>
 
 BaseNode::~BaseNode() {}
 
-void BaseNode::serialize(auto &ar, const unsigned int /*version*/)
-{
-    ar(m_name, m_children, m_parent);
+void BaseNode::serialize(auto &ar, const unsigned int /*version*/) {
+  ar(m_name, m_children, m_parent);
 }
 
 template DUMMY_LIB_BASE_EXPORT void
@@ -22,9 +23,25 @@ BaseNode::serialize<cereal::BinaryOutputArchive>(cereal::BinaryOutputArchive &,
                                                  const unsigned int);
 
 template DUMMY_LIB_BASE_EXPORT void
+BaseNode::serialize<cereal::PortableBinaryOutputArchive>(
+    cereal::PortableBinaryOutputArchive &, const unsigned int);
+
+template DUMMY_LIB_BASE_EXPORT void
+BaseNode::serialize<cereal::XMLOutputArchive>(cereal::XMLOutputArchive &,
+                                              const unsigned int);
+
+template DUMMY_LIB_BASE_EXPORT void
 BaseNode::serialize<cereal::JSONInputArchive>(cereal::JSONInputArchive &,
                                               const unsigned int);
 
 template DUMMY_LIB_BASE_EXPORT void
 BaseNode::serialize<cereal::BinaryInputArchive>(cereal::BinaryInputArchive &,
+                                                const unsigned int);
+
+template DUMMY_LIB_BASE_EXPORT void
+BaseNode::serialize<cereal::PortableBinaryInputArchive>(cereal::PortableBinaryInputArchive &,
+                                              const unsigned int);
+
+template DUMMY_LIB_BASE_EXPORT void
+BaseNode::serialize<cereal::XMLInputArchive>(cereal::XMLInputArchive &,
                                                 const unsigned int);
