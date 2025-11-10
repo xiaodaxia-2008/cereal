@@ -16,16 +16,16 @@
         names of its contributors may be used to endorse or promote products
         derived from this software without specific prior written permission.
 
-  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
-  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 #ifndef CEREAL_TYPES_POLYMORPHIC_HPP_
 #define CEREAL_TYPES_POLYMORPHIC_HPP_
@@ -33,34 +33,16 @@
 #include "cereal/cereal.hpp"
 #include "cereal/types/memory.hpp"
 
-#include "cereal/details/util.hpp"
 #include "cereal/details/helpers.hpp"
-#include "cereal/details/traits.hpp"
 #include "cereal/details/polymorphic_impl.hpp"
+#include "cereal/details/traits.hpp"
+#include "cereal/details/util.hpp"
 
 #if defined(_MSC_VER) && _MSC_VER < 1916
 #define CEREAL_STATIC_CONSTEXPR static
 #else
 #define CEREAL_STATIC_CONSTEXPR static constexpr
 #endif
-
-#define CONCAT_IMPL(a, b) a##b
-#define CONCAT(a, b) CONCAT_IMPL(a, b)
-#define UNIQUE_NAME(name) CONCAT(name, __COUNTER__)
-
-#define CEREAL_REGISTER_TYPE_TO_ARCHIVES(T, ...)                  \
-  namespace cereal                                                \
-  {                                                               \
-    namespace detail                                              \
-    {                                                             \
-      template <>                                                 \
-      struct binding_name<T>                                      \
-      {                                                           \
-        CEREAL_STATIC_CONSTEXPR char const *name() { return #T; } \
-      };                                                          \
-    }                                                             \
-  } /* end namespaces */                                          \
-  CEREAL_BIND_TO_ARCHIVES(T, __VA_ARGS__)
 
 //! Registers a derived polymorphic type with cereal
 /*! Polymorphic types must be registered before smart
@@ -97,13 +79,21 @@
 
     Polymorphic support in cereal requires RTTI to be
     enabled */
-#define CEREAL_REGISTER_TYPE(T) \
-  CEREAL_REGISTER_TYPE_TO_ARCHIVES(T, Binary, JSON)
+#define CEREAL_REGISTER_TYPE(T)                                   \
+  namespace cereal                                                \
+  {                                                               \
+    namespace detail                                              \
+    {                                                             \
+      template <>                                                 \
+      struct binding_name<T>                                      \
+      {                                                           \
+        CEREAL_STATIC_CONSTEXPR char const *name() { return #T; } \
+      };                                                          \
+    }                                                             \
+  } /* end namespaces */                                          \
+  CEREAL_BIND_TO_ARCHIVES(T)
 
-#define CEREAL_REGISTER_TYPE_TO_ALL_ARCHIVES(T) \
-  CEREAL_REGISTER_TYPE_TO_ARCHIVES(T, Binary, JSON, XML, PortableBinary)
-
-#define CEREAL_REGISTER_TYPE_WITH_NAME_TO_ARCHIVES(T, Name, ...)    \
+#define CEREAL_REGISTER_TYPE_WITH_NAME_TO_ARCHIVES(T, Name)         \
   namespace cereal                                                  \
   {                                                                 \
     namespace detail                                                \
@@ -115,7 +105,7 @@
       };                                                            \
     }                                                               \
   } /* end namespaces */                                            \
-  CEREAL_BIND_TO_ARCHIVES(T, __VA_ARGS__)
+  CEREAL_BIND_TO_ARCHIVES(T)
 
 //! Registers a polymorphic type with cereal, giving it a
 //! user defined name
@@ -124,10 +114,7 @@
     suitable.  This macro allows any name to be associated
     with the type.  The name should be unique */
 #define CEREAL_REGISTER_TYPE_WITH_NAME(T, Name) \
-  CEREAL_REGISTER_TYPE_WITH_NAME_TO_ARCHIVES(T, Name, Binary, JSON)
-
-#define CEREAL_REGISTER_TYPE_WITH_NAME_TO_ALL_ARCHIVES(T, Name) \
-  CEREAL_REGISTER_TYPE_WITH_NAME_TO_ARCHIVES(T, Name, Binary, JSON, XML, PortableBinary)
+  CEREAL_REGISTER_TYPE_WITH_NAME_TO_ARCHIVES(T, Name)
 
 //! Registers the base-derived relationship for a polymorphic type
 /*! When polymorphic serialization occurs, cereal needs to know how to
@@ -142,8 +129,18 @@
     class serialization that will be used to store a Derived pointer.
 
     Placement of this is the same as for CEREAL_REGISTER_TYPE. */
-#define CEREAL_REGISTER_POLYMORPHIC_RELATION(Base, Derived) \
-  volatile auto UNIQUE_NAME(dummy) = ::cereal::detail::RegisterPolymorphicCaster<Base, Derived>::bind();
+#define CEREAL_REGISTER_POLYMORPHIC_RELATION(Base, Derived)                      \
+  namespace cereal                                                               \
+  {                                                                              \
+    namespace detail                                                             \
+    {                                                                            \
+      template <>                                                                \
+      struct PolymorphicRelation<Base, Derived>                                  \
+      {                                                                          \
+        static void bind() { RegisterPolymorphicCaster<Base, Derived>::bind(); } \
+      };                                                                         \
+    }                                                                            \
+  } /* end namespaces */
 
 //! Adds a way to force initialization of a translation unit containing
 //! calls to CEREAL_REGISTER_TYPE
@@ -212,26 +209,36 @@ namespace cereal
   {
 //! Error message used for unregistered polymorphic types
 /*! @internal */
-#define UNREGISTERED_POLYMORPHIC_EXCEPTION(LoadSave, Name)                                                                                                                                                          \
-  throw cereal::Exception("Trying to " #LoadSave " an unregistered polymorphic type (" + Name + ").\n"                                                                                                              \
-                                                                                                "Make sure your type is registered with CEREAL_REGISTER_TYPE and that the archive "                                 \
-                                                                                                "you are using was included (and registered with CEREAL_REGISTER_ARCHIVE) prior to calling CEREAL_REGISTER_TYPE.\n" \
-                                                                                                "If your type is already registered and you still see this error, you may need to use CEREAL_REGISTER_DYNAMIC_INIT.");
+#define UNREGISTERED_POLYMORPHIC_EXCEPTION(LoadSave, Name)                    \
+  throw cereal::Exception(                                                    \
+      "Trying to " #LoadSave " an unregistered polymorphic type (" + Name +   \
+      ").\n"                                                                  \
+      "Make sure your type is registered with CEREAL_REGISTER_TYPE and that " \
+      "the archive "                                                          \
+      "you are using was included (and registered with "                      \
+      "CEREAL_REGISTER_ARCHIVE) prior to calling CEREAL_REGISTER_TYPE.\n"     \
+      "If your type is already registered and you still see this error, you " \
+      "may need to use CEREAL_REGISTER_DYNAMIC_INIT.");
 
-    //! Get an input binding from the given archive by deserializing the type meta data
+    //! Get an input binding from the given archive by deserializing the type meta
+    //! data
     /*! @internal */
     template <class Archive>
-    inline
-        typename ::cereal::detail::InputBindingMap<Archive>::Serializers
-        getInputBinding(Archive &ar, std::uint32_t const nameid)
+    inline typename ::cereal::detail::InputBindingMap<Archive>::Serializers
+    getInputBinding(Archive &ar, std::uint32_t const nameid)
     {
       // If the nameid is zero, we serialized a null pointer
       if (nameid == 0)
       {
-        typename ::cereal::detail::InputBindingMap<Archive>::Serializers emptySerializers;
-        emptySerializers.shared_ptr = [](void *, std::shared_ptr<void> &ptr, std::type_info const &)
+        typename ::cereal::detail::InputBindingMap<Archive>::Serializers
+            emptySerializers;
+        emptySerializers.shared_ptr = [](void *, std::shared_ptr<void> &ptr,
+                                         std::type_info const &)
         { ptr.reset(); };
-        emptySerializers.unique_ptr = [](void *, std::unique_ptr<void, ::cereal::detail::EmptyDeleter<void>> &ptr, std::type_info const &)
+        emptySerializers.unique_ptr =
+            [](void *,
+               std::unique_ptr<void, ::cereal::detail::EmptyDeleter<void>> &ptr,
+               std::type_info const &)
         { ptr.reset(nullptr); };
         return emptySerializers;
       }
@@ -245,7 +252,8 @@ namespace cereal
       else
         name = ar.getPolymorphicName(nameid);
 
-      auto const &bindingMap = detail::StaticObject<detail::InputBindingMap<Archive>>::getInstance().map;
+      auto const &bindingMap =
+          detail::StaticObject<detail::InputBindingMap<Archive>>::getInstance().map;
 
       auto binding = bindingMap.find(name);
       if (binding == bindingMap.end())
@@ -253,17 +261,23 @@ namespace cereal
       return binding->second;
     }
 
-    //! Serialize a shared_ptr if the 2nd msb in the nameid is set, and if we can actually construct the pointee
-    /*! This check lets us try and skip doing polymorphic machinery if we can get away with
-        using the derived class serialize function
+    //! Serialize a shared_ptr if the 2nd msb in the nameid is set, and if we can
+    //! actually construct the pointee
+    /*! This check lets us try and skip doing polymorphic machinery if we can get
+       away with using the derived class serialize function
 
-        Note that on MSVC 2013 preview, is_default_constructible<T> returns true for abstract classes with
-        default constructors, but on clang/gcc this will return false.  So we also need to check for that here.
+        Note that on MSVC 2013 preview, is_default_constructible<T> returns true for
+       abstract classes with default constructors, but on clang/gcc this will return
+       false.  So we also need to check for that here.
         @internal */
     template <class Archive, class T>
-    inline
-        typename std::enable_if<(traits::is_default_constructible<T>::value || traits::has_load_and_construct<T, Archive>::value) && !std::is_abstract<T>::value, bool>::type
-        serialize_wrapper(Archive &ar, std::shared_ptr<T> &ptr, std::uint32_t const nameid)
+    inline typename std::enable_if<
+        (traits::is_default_constructible<T>::value ||
+         traits::has_load_and_construct<T, Archive>::value) &&
+            !std::is_abstract<T>::value,
+        bool>::type
+    serialize_wrapper(Archive &ar, std::shared_ptr<T> &ptr,
+                      std::uint32_t const nameid)
     {
       if (nameid & detail::msb2_32bit)
       {
@@ -273,14 +287,19 @@ namespace cereal
       return false;
     }
 
-    //! Serialize a unique_ptr if the 2nd msb in the nameid is set, and if we can actually construct the pointee
-    /*! This check lets us try and skip doing polymorphic machinery if we can get away with
-        using the derived class serialize function
+    //! Serialize a unique_ptr if the 2nd msb in the nameid is set, and if we can
+    //! actually construct the pointee
+    /*! This check lets us try and skip doing polymorphic machinery if we can get
+       away with using the derived class serialize function
         @internal */
     template <class Archive, class T, class D>
-    inline
-        typename std::enable_if<(traits::is_default_constructible<T>::value || traits::has_load_and_construct<T, Archive>::value) && !std::is_abstract<T>::value, bool>::type
-        serialize_wrapper(Archive &ar, std::unique_ptr<T, D> &ptr, std::uint32_t const nameid)
+    inline typename std::enable_if<
+        (traits::is_default_constructible<T>::value ||
+         traits::has_load_and_construct<T, Archive>::value) &&
+            !std::is_abstract<T>::value,
+        bool>::type
+    serialize_wrapper(Archive &ar, std::unique_ptr<T, D> &ptr,
+                      std::uint32_t const nameid)
     {
       if (nameid & detail::msb2_32bit)
       {
@@ -290,47 +309,62 @@ namespace cereal
       return false;
     }
 
-    //! Serialize a shared_ptr if the 2nd msb in the nameid is set, and if we can actually construct the pointee
-    /*! This case is for when we can't actually construct the shared pointer.  Normally this would be caught
-        as the pointer itself is serialized, but since this is a polymorphic pointer, if we tried to serialize
-        the pointer we'd end up back here recursively.  So we have to catch the error here as well, if
+    //! Serialize a shared_ptr if the 2nd msb in the nameid is set, and if we can
+    //! actually construct the pointee
+    /*! This case is for when we can't actually construct the shared pointer.
+       Normally this would be caught as the pointer itself is serialized, but since
+       this is a polymorphic pointer, if we tried to serialize the pointer we'd end
+       up back here recursively.  So we have to catch the error here as well, if
         this was a polymorphic type serialized by its proper pointer type
         @internal */
     template <class Archive, class T>
-    inline
-        typename std::enable_if<(!traits::is_default_constructible<T>::value && !traits::has_load_and_construct<T, Archive>::value) || std::is_abstract<T>::value, bool>::type
-        serialize_wrapper(Archive &, std::shared_ptr<T> &, std::uint32_t const nameid)
+    inline typename std::enable_if<
+        (!traits::is_default_constructible<T>::value &&
+         !traits::has_load_and_construct<T, Archive>::value) ||
+            std::is_abstract<T>::value,
+        bool>::type
+    serialize_wrapper(Archive &, std::shared_ptr<T> &, std::uint32_t const nameid)
     {
       if (nameid & detail::msb2_32bit)
-        throw cereal::Exception("Cannot load a polymorphic type that is not default constructable and does not have a load_and_construct function");
+        throw cereal::Exception(
+            "Cannot load a polymorphic type that is not default constructable and "
+            "does not have a load_and_construct function");
       return false;
     }
 
-    //! Serialize a unique_ptr if the 2nd msb in the nameid is set, and if we can actually construct the pointee
-    /*! This case is for when we can't actually construct the unique pointer.  Normally this would be caught
-        as the pointer itself is serialized, but since this is a polymorphic pointer, if we tried to serialize
-        the pointer we'd end up back here recursively.  So we have to catch the error here as well, if
+    //! Serialize a unique_ptr if the 2nd msb in the nameid is set, and if we can
+    //! actually construct the pointee
+    /*! This case is for when we can't actually construct the unique pointer.
+       Normally this would be caught as the pointer itself is serialized, but since
+       this is a polymorphic pointer, if we tried to serialize the pointer we'd end
+       up back here recursively.  So we have to catch the error here as well, if
         this was a polymorphic type serialized by its proper pointer type
         @internal */
     template <class Archive, class T, class D>
-    inline
-        typename std::enable_if<(!traits::is_default_constructible<T>::value && !traits::has_load_and_construct<T, Archive>::value) || std::is_abstract<T>::value, bool>::type
-        serialize_wrapper(Archive &, std::unique_ptr<T, D> &, std::uint32_t const nameid)
+    inline typename std::enable_if<
+        (!traits::is_default_constructible<T>::value &&
+         !traits::has_load_and_construct<T, Archive>::value) ||
+            std::is_abstract<T>::value,
+        bool>::type
+    serialize_wrapper(Archive &, std::unique_ptr<T, D> &,
+                      std::uint32_t const nameid)
     {
       if (nameid & detail::msb2_32bit)
-        throw cereal::Exception("Cannot load a polymorphic type that is not default constructable and does not have a load_and_construct function");
+        throw cereal::Exception(
+            "Cannot load a polymorphic type that is not default constructable and "
+            "does not have a load_and_construct function");
       return false;
     }
-  } // polymorphic_detail
+  } // namespace polymorphic_detail
 
   // ######################################################################
   // Pointer serialization for polymorphic types
 
   //! Saving std::shared_ptr for polymorphic types, abstract
   template <class Archive, class T>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value && std::is_abstract<T>::value, void>::type
-      CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::shared_ptr<T> const &ptr)
+  inline typename std::enable_if<
+      std::is_polymorphic<T>::value && std::is_abstract<T>::value, void>::type
+  CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::shared_ptr<T> const &ptr)
   {
     if (!ptr)
     {
@@ -345,20 +379,23 @@ namespace cereal
     // of an abstract object
     //  this implies we need to do the lookup
 
-    auto const &bindingMap = detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance().map;
+    auto const &bindingMap =
+        detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance()
+            .map;
 
     auto binding = bindingMap.find(std::type_index(ptrinfo));
     if (binding == bindingMap.end())
-      UNREGISTERED_POLYMORPHIC_EXCEPTION(save, cereal::util::demangle(ptrinfo.name()))
+      UNREGISTERED_POLYMORPHIC_EXCEPTION(save,
+                                         cereal::util::demangle(ptrinfo.name()))
 
     binding->second.shared_ptr(&ar, ptr.get(), tinfo);
   }
 
   //! Saving std::shared_ptr for polymorphic types, not abstract
   template <class Archive, class T>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value && !std::is_abstract<T>::value, void>::type
-      CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::shared_ptr<T> const &ptr)
+  inline typename std::enable_if<
+      std::is_polymorphic<T>::value && !std::is_abstract<T>::value, void>::type
+  CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::shared_ptr<T> const &ptr)
   {
     if (!ptr)
     {
@@ -381,20 +418,22 @@ namespace cereal
       return;
     }
 
-    auto const &bindingMap = detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance().map;
+    auto const &bindingMap =
+        detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance()
+            .map;
 
     auto binding = bindingMap.find(std::type_index(ptrinfo));
     if (binding == bindingMap.end())
-      UNREGISTERED_POLYMORPHIC_EXCEPTION(save, cereal::util::demangle(ptrinfo.name()))
+      UNREGISTERED_POLYMORPHIC_EXCEPTION(save,
+                                         cereal::util::demangle(ptrinfo.name()))
 
     binding->second.shared_ptr(&ar, ptr.get(), tinfo);
   }
 
   //! Loading std::shared_ptr for polymorphic types
   template <class Archive, class T>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value, void>::type
-      CEREAL_LOAD_FUNCTION_NAME(Archive &ar, std::shared_ptr<T> &ptr)
+  inline typename std::enable_if<std::is_polymorphic<T>::value, void>::type
+  CEREAL_LOAD_FUNCTION_NAME(Archive &ar, std::shared_ptr<T> &ptr)
   {
     std::uint32_t nameid;
     ar(CEREAL_NVP_("polymorphic_id", nameid));
@@ -411,9 +450,8 @@ namespace cereal
 
   //! Saving std::weak_ptr for polymorphic types
   template <class Archive, class T>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value, void>::type
-      CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::weak_ptr<T> const &ptr)
+  inline typename std::enable_if<std::is_polymorphic<T>::value, void>::type
+  CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::weak_ptr<T> const &ptr)
   {
     auto const sptr = ptr.lock();
     ar(CEREAL_NVP_("locked_ptr", sptr));
@@ -421,9 +459,8 @@ namespace cereal
 
   //! Loading std::weak_ptr for polymorphic types
   template <class Archive, class T>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value, void>::type
-      CEREAL_LOAD_FUNCTION_NAME(Archive &ar, std::weak_ptr<T> &ptr)
+  inline typename std::enable_if<std::is_polymorphic<T>::value, void>::type
+  CEREAL_LOAD_FUNCTION_NAME(Archive &ar, std::weak_ptr<T> &ptr)
   {
     std::shared_ptr<T> sptr;
     ar(CEREAL_NVP_("locked_ptr", sptr));
@@ -432,9 +469,9 @@ namespace cereal
 
   //! Saving std::unique_ptr for polymorphic types that are abstract
   template <class Archive, class T, class D>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value && std::is_abstract<T>::value, void>::type
-      CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::unique_ptr<T, D> const &ptr)
+  inline typename std::enable_if<
+      std::is_polymorphic<T>::value && std::is_abstract<T>::value, void>::type
+  CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::unique_ptr<T, D> const &ptr)
   {
     if (!ptr)
     {
@@ -449,20 +486,23 @@ namespace cereal
     // of an abstract object
     //  this implies we need to do the lookup
 
-    auto const &bindingMap = detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance().map;
+    auto const &bindingMap =
+        detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance()
+            .map;
 
     auto binding = bindingMap.find(std::type_index(ptrinfo));
     if (binding == bindingMap.end())
-      UNREGISTERED_POLYMORPHIC_EXCEPTION(save, cereal::util::demangle(ptrinfo.name()))
+      UNREGISTERED_POLYMORPHIC_EXCEPTION(save,
+                                         cereal::util::demangle(ptrinfo.name()))
 
     binding->second.unique_ptr(&ar, ptr.get(), tinfo);
   }
 
   //! Saving std::unique_ptr for polymorphic types, not abstract
   template <class Archive, class T, class D>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value && !std::is_abstract<T>::value, void>::type
-      CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::unique_ptr<T, D> const &ptr)
+  inline typename std::enable_if<
+      std::is_polymorphic<T>::value && !std::is_abstract<T>::value, void>::type
+  CEREAL_SAVE_FUNCTION_NAME(Archive &ar, std::unique_ptr<T, D> const &ptr)
   {
     if (!ptr)
     {
@@ -485,20 +525,23 @@ namespace cereal
       return;
     }
 
-    auto const &bindingMap = detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance().map;
+    auto const &bindingMap =
+        detail::StaticObject<detail::OutputBindingMap<Archive>>::getInstance()
+            .map;
 
     auto binding = bindingMap.find(std::type_index(ptrinfo));
     if (binding == bindingMap.end())
-      UNREGISTERED_POLYMORPHIC_EXCEPTION(save, cereal::util::demangle(ptrinfo.name()))
+      UNREGISTERED_POLYMORPHIC_EXCEPTION(save,
+                                         cereal::util::demangle(ptrinfo.name()))
 
     binding->second.unique_ptr(&ar, ptr.get(), tinfo);
   }
 
-  //! Loading std::unique_ptr, case when user provides load_and_construct for polymorphic types
+  //! Loading std::unique_ptr, case when user provides load_and_construct for
+  //! polymorphic types
   template <class Archive, class T, class D>
-  inline
-      typename std::enable_if<std::is_polymorphic<T>::value, void>::type
-      CEREAL_LOAD_FUNCTION_NAME(Archive &ar, std::unique_ptr<T, D> &ptr)
+  inline typename std::enable_if<std::is_polymorphic<T>::value, void>::type
+  CEREAL_LOAD_FUNCTION_NAME(Archive &ar, std::unique_ptr<T, D> &ptr)
   {
     std::uint32_t nameid;
     ar(CEREAL_NVP_("polymorphic_id", nameid));

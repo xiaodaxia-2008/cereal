@@ -48,7 +48,6 @@
 #define CEREAL_DETAILS_POLYMORPHIC_IMPL_HPP_
 
 #include "binding_map.hpp"
-#include "loop_macros.hpp"
 #include "cereal/details/polymorphic_impl_fwd.hpp"
 #include "cereal/details/static_object.hpp"
 #include "cereal/types/memory.hpp"
@@ -70,21 +69,23 @@
     static void unused() { (void)b; }
 #endif
 
-#define _CEREAL_BIND_TO_ARCHIVE(T, AR)                                               \
-    polymorphic_serialization_support<CONCAT(AR, OutputArchive), T>().instantiate(); \
-    polymorphic_serialization_support<CONCAT(AR, InputArchive), T>().instantiate();
-
 //! Binds a polymorphic type to all registered archives
 /*! This binds a polymorphic type to all compatible registered archives that
     have been registered with CEREAL_REGISTER_ARCHIVE.  This must be called
     after all archives are registered (usually after the archives themselves
     have been included). */
-#define CEREAL_BIND_TO_ARCHIVES(T, ...)                                                                          \
-    namespace cereal::detail                                                                                     \
-    {                                                                                                            \
-        volatile int UNIQUE_NAME(dummy) = [] { FOR_EACH2(_CEREAL_BIND_TO_ARCHIVE, T, __VA_ARGS__)                \
-                                               return 0; }(); \
-    }
+#define CEREAL_BIND_TO_ARCHIVES(...)                                     \
+    namespace cereal {                                                   \
+    namespace detail {                                                   \
+    template<>                                                           \
+    struct init_binding<__VA_ARGS__> {                                   \
+        static inline bind_to_archives<__VA_ARGS__> const & b=           \
+        ::cereal::detail::StaticObject<                                  \
+            bind_to_archives<__VA_ARGS__>                                \
+        >::getInstance().bind();                                         \
+        CEREAL_BIND_TO_ARCHIVES_UNUSED_FUNCTION                          \
+    };                                                                   \
+    }} /* end namespaces */
 
 namespace cereal
 {
@@ -358,6 +359,9 @@ namespace cereal
             {
                 return bind(typename std::is_polymorphic<Base>::type());
             }
+
+            // This is a hack to force the linker to call bind()
+            static inline bool dummy = [] { bind(); return true; } ();
         };
     } // namespace detail
 
@@ -645,17 +649,8 @@ namespace cereal
         template <class Archive, class T>
         struct polymorphic_serialization_support
         {
-#if defined(_MSC_VER) && !defined(__INTEL_COMPILER)
-            //! Creates the appropriate bindings depending on whether the archive
-            //! supports saving or loading
-            virtual CEREAL_DLL_EXPORT void instantiate() CEREAL_USED;
-#else  // NOT _MSC_VER
-       //! Creates the appropriate bindings depending on whether the archive
-       //! supports saving or loading
             static CEREAL_DLL_EXPORT void instantiate() CEREAL_USED;
-            //! This typedef causes the compiler to instantiate this static function
-            typedef instantiate_function<instantiate> unused;
-#endif // _MSC_VER
+            static inline bool dummy = [] { instantiate(); return true; } (); 
         };
 
         // instantiate implementation
