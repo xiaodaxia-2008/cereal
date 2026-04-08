@@ -1096,6 +1096,11 @@ private:
   std::unordered_map<std::size_t, std::uint32_t> itsVersionedTypes;
 }; // class InputArchive
 
+template <typename Archive>
+concept CanCheckName = requires(Archive ar) {
+  { ar.hasName("dummy") } -> std::convertible_to<bool>;
+};
+
 /// <summary>
 /// Save/Load an NVP if its name is located inside the text archive
 /// Returns TRUE if the value is loaded or saved
@@ -1105,12 +1110,9 @@ bool make_optional_nvp(Archive &ar, const char *name, T &&value) {
   constexpr bool isTextArchive = traits::is_text_archive<Archive>::value;
   constexpr bool isInputArchive =
       std::is_base_of_v<InputArchive<Archive>, Archive>;
-  constexpr bool canCheckName = requires {
-    { ar.hasName("dummy") } -> std::convertible_to<bool>;
-  };
 
   // Do check for node here, if not available then bail!
-  if constexpr (isTextArchive && isInputArchive && canCheckName) {
+  if constexpr (isTextArchive && isInputArchive && CanCheckName<Archive>) {
     if (!ar.hasName(name))
       return false;
   }
