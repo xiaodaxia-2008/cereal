@@ -78,7 +78,7 @@ target_include_directories(cereal PUBLIC
 list(APPEND CEREAL_THREAD_LIBS cereal::cereal)
 
 if(NOT CMAKE_VERSION VERSION_LESS 3.8)
-    target_compile_features(cereal PUBLIC cxx_std_17)
+    target_compile_features(cereal PUBLIC cxx_std_20)
 endif()
 
 option(CEREAL_INSTALL "Generate the install target" ${CEREAL_MASTER_PROJECT})
