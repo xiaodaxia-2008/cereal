@@ -512,8 +512,11 @@ public:
 
       // Do a search if we don't see a name coming up, or if the names don't
       // match
-      if (!actualName || std::strcmp(name, actualName) != 0)
+      if (actualName && std::strcmp(name, actualName) == 0) {
+        return true;
+      } else {
         return itsIteratorStack.back().hasName(name);
+      }
     }
 
     return false;
@@ -656,8 +659,8 @@ public:
 
       By default our strategy is to start with the document root node and then
      recursively iterate through all children in the order they show up in the
-     document. We don't need to know NVPs to do this; we'll just blindly load in
-     the order things appear in.
+     document. We don't need to know NVPs to do this; we'll just blindly load
+     in the order things appear in.
 
       If we were given an NVP, we will search for it if it does not match our
      the name of the next node that would normally be loaded.  This
@@ -847,7 +850,8 @@ private:
   }
 
 public:
-  //! Loads a value from the current node - long double and long long overloads
+  //! Loads a value from the current node - long double and long long
+  //! overloads
   template <class T,
             traits::EnableIf<std::is_arithmetic<T>::value,
                              !std::is_same<T, long>::value,
@@ -980,7 +984,8 @@ inline void prologue(JSONInputArchive &ar, T const &) {
 }
 
 // ######################################################################
-//! Epilogue for all other types other for JSON archives (except minimal types)
+//! Epilogue for all other types other for JSON archives (except minimal
+//! types)
 /*! Finishes the node created in the prologue
 
     Minimal types do not start or finish nodes */
