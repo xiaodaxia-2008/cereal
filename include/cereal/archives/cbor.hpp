@@ -589,20 +589,23 @@ public:
         itsStream.write(itsBuffer.data(), itsBuffer.size());
     }
 
-    void saveBinaryValue(const void *data, size_t size,
-                         const char *name = nullptr)
+    void saveBinaryValue(const void *data, size_t size)
     {
-        if (name) {
-            setNextName(name);
-        }
-        writeName();
-
         detail::encodeArg(detail::cbor::major::bstr, size, itsBuffer, itsPos);
         if (size > 0) {
             ensureCapacity(size);
             std::memcpy(&itsBuffer[itsPos], data, size);
             itsPos += size;
         }
+    }
+
+    void saveBinaryValue(const void *data, size_t size, const char *name)
+    {
+        if (name) {
+            setNextName(name);
+        }
+        writeName();
+        saveBinaryValue(data, size);
     }
 
     void startNode()
@@ -872,6 +875,8 @@ public:
         itsNodeStack.top() = NodeType::StartArray;
     }
 
+
+
 private:
     void ensureCapacity(size_t additional)
     {
@@ -924,11 +929,8 @@ public:
         return false;
     }
 
-    void loadBinaryValue(void *data, size_t size, const char *name = nullptr)
+    void loadBinaryValue(void *data, size_t size)
     {
-        if (name) {
-            itsNextName = name;
-        }
         search();
         if (itsKeyNotFound) {
             itsKeyNotFound = false;
@@ -946,6 +948,14 @@ public:
         std::memcpy(data, val.bin.data(), size);
         ++itsIteratorStack.back();
         itsNextName = nullptr;
+    }
+
+    void loadBinaryValue(void *data, size_t size, const char *name)
+    {
+        if (name) {
+            itsNextName = name;
+        }
+        loadBinaryValue(data, size);
     }
 
     class Iterator
@@ -1680,6 +1690,31 @@ inline void epilogue(CborInputArchive &,
 {
 }
 
+// ============================================================================
+// Prologue / Epilogue for BinaryData
+// These override the generic non-arithmetic catch-all so that BinaryData is
+// treated as a leaf value (byte string), not as a map/array node.
+// ============================================================================
+template <class T>
+inline void prologue(CborOutputArchive &ar, BinaryData<T> const &)
+{
+    ar.writeName();
+}
+
+template <class T>
+inline void prologue(CborInputArchive &, BinaryData<T> const &)
+{
+}
+
+template <class T>
+inline void epilogue(CborOutputArchive &, BinaryData<T> const &)
+{
+}
+
+template <class T>
+inline void epilogue(CborInputArchive &, BinaryData<T> const &)
+{
+}
 
 
 // ============================================================================
@@ -1703,8 +1738,7 @@ inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar, NameValuePair<T> &t)
     ar(t.value);
 }
 
-inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar,
-                                      std::nullptr_t const &t)
+inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar, std::nullptr_t const &t)
 {
     ar.saveValue(t);
 }
@@ -1712,6 +1746,20 @@ inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar,
 inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar, std::nullptr_t &t)
 {
     ar.loadValue(t);
+}
+
+//! Save raw binary data as a CBOR byte string.
+template <class T>
+inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar, BinaryData<T> const &bd)
+{
+    ar.saveBinaryValue(bd.data, static_cast<size_t>(bd.size));
+}
+
+//! Load raw binary data from a CBOR byte string.
+template <class T>
+inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar, BinaryData<T> &bd)
+{
+    ar.loadBinaryValue(bd.data, static_cast<size_t>(bd.size));
 }
 
 template <class T,
@@ -1749,14 +1797,24 @@ CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar,
 
 
 template <class T>
-inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &, SizeTag<T> const &)
+inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar, SizeTag<T> const &st)
 {
+    if constexpr (traits::is_output_serializable<BinaryData<T>, CborOutputArchive>::value) {
+        ar.writeName();
+        ar.saveValue(static_cast<uint64_t>(st.size));
+    }
 }
 
 template <class T>
 inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar, SizeTag<T> &st)
 {
-    ar.loadSize(st.size);
+    if constexpr (traits::is_input_serializable<BinaryData<T>, CborInputArchive>::value) {
+        uint64_t size;
+        ar.loadValue(size);
+        st.size = static_cast<size_type>(size);
+    } else {
+        ar.loadSize(st.size);
+    }
 }
 
 } // namespace cereal
