@@ -691,7 +691,12 @@ public:
               typename std::enable_if<!std::is_same<CharT, char>::value, int>::type = 0>
     void saveValue(std::basic_string<CharT, Traits, Alloc> const &s)
     {
-        saveBinaryValue(s.data(), s.size() * sizeof(CharT));
+        detail::encodeArg(detail::cbor::major::bstr, s.size() * sizeof(CharT), itsBuffer, itsPos);
+        if (s.size() > 0) {
+            ensureCapacity(s.size() * sizeof(CharT));
+            std::memcpy(&itsBuffer[itsPos], s.data(), s.size() * sizeof(CharT));
+            itsPos += s.size() * sizeof(CharT);
+        }
     }
 
     void saveValue(char const *s)
