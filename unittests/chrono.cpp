@@ -49,4 +49,10 @@ TEST_CASE("json_chrono")
   test_chrono<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_chrono")
+{
+  test_chrono<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

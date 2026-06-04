@@ -49,4 +49,10 @@ TEST_CASE("json_priority_queue")
   test_priority_queue<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_priority_queue")
+{
+  test_priority_queue<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

@@ -49,6 +49,12 @@ TEST_CASE("json_polymorphic")
   test_polymorphic<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_polymorphic")
+{
+  test_polymorphic<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 #if CEREAL_THREAD_SAFE
 TEST_CASE("binary_polymorphic_threading")
 {
@@ -68,6 +74,11 @@ TEST_CASE("xml_polymorphic_threading")
 TEST_CASE("json_polymorphic_threading")
 {
   test_polymorphic_threading<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
+}
+
+TEST_CASE("cbor_polymorphic_threading")
+{
+  test_polymorphic_threading<cereal::CborInputArchive, cereal::CborOutputArchive>();
 }
 #endif // CEREAL_THREAD_SAFE
 

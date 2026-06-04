@@ -21,6 +21,7 @@
 #include <sstream>
 #include <stack>
 #include <string>
+#include <valarray>
 #include <vector>
 
 namespace cereal
@@ -528,8 +529,7 @@ inline CborNode parseCbor(const std::string &buffer)
 // ============================================================================
 // CborOutputArchive
 // ============================================================================
-class CborOutputArchive : public OutputArchive<CborOutputArchive>,
-                          public traits::TextArchive
+class CborOutputArchive : public OutputArchive<CborOutputArchive>
 {
     enum class NodeType
     {
@@ -685,6 +685,13 @@ public:
             std::memcpy(&itsBuffer[itsPos], s.data(), s.size());
             itsPos += s.size();
         }
+    }
+
+    template <class CharT, class Traits, class Alloc,
+              typename std::enable_if<!std::is_same<CharT, char>::value, int>::type = 0>
+    void saveValue(std::basic_string<CharT, Traits, Alloc> const &s)
+    {
+        saveBinaryValue(s.data(), s.size() * sizeof(CharT));
     }
 
     void saveValue(char const *s)
@@ -880,8 +887,7 @@ private:
 // ============================================================================
 // CborInputArchive
 // ============================================================================
-class CborInputArchive : public InputArchive<CborInputArchive>,
-                         public traits::TextArchive
+class CborInputArchive : public InputArchive<CborInputArchive>
 {
 public:
     CborInputArchive(std::istream &stream)
@@ -1150,6 +1156,22 @@ public:
             throw Exception("Expected string in CBOR");
         }
         val = v.s;
+        ++itsIteratorStack.back();
+    }
+
+    template <class CharT, class Traits, class Alloc,
+              typename std::enable_if<!std::is_same<CharT, char>::value, int>::type = 0>
+    void loadValue(std::basic_string<CharT, Traits, Alloc> &val)
+    {
+        search();
+        auto &v = itsIteratorStack.back().value();
+        if (v.type != detail::CborNode::Bytes) {
+            throw Exception("Expected CBOR byte string for wide string");
+        }
+        val.resize(v.bin.size() / sizeof(CharT));
+        if (v.bin.size() > 0) {
+            std::memcpy(const_cast<CharT *>(val.data()), v.bin.data(), v.bin.size());
+        }
         ++itsIteratorStack.back();
     }
 
@@ -1535,25 +1557,7 @@ inline void epilogue(CborInputArchive &,
 {
 }
 
-template <class T>
-inline void prologue(CborOutputArchive &, BinaryData<T> const &)
-{
-}
 
-template <class T>
-inline void prologue(CborInputArchive &, BinaryData<T> const &)
-{
-}
-
-template <class T>
-inline void epilogue(CborOutputArchive &, BinaryData<T> const &)
-{
-}
-
-template <class T>
-inline void epilogue(CborInputArchive &, BinaryData<T> const &)
-{
-}
 
 // ============================================================================
 // Cereal Serialization functions
@@ -1614,43 +1618,9 @@ CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar,
     ar.loadValue(str);
 }
 
-template <class T>
-inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar,
-                                      BinaryData<T> const &bd)
-{
-    ar.saveBinaryValue(bd.data, static_cast<std::size_t>(bd.size));
-}
 
-template <class T>
-inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar, BinaryData<T> &bd)
-{
-    ar.loadBinaryValue(bd.data, static_cast<std::size_t>(bd.size));
-}
 
-// Vector optimization layout [size, byte_string]
-template <class T, class A,
-          typename std::enable_if<std::is_arithmetic<T>::value &&
-                                      !std::is_same<T, bool>::value,
-                                  int>::type = 0>
-inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar,
-                                      std::vector<T, A> const &vector)
-{
-    ar(static_cast<size_type>(vector.size()));
-    ar(binary_data(vector.data(), vector.size() * sizeof(T)));
-}
 
-template <class T, class A,
-          typename std::enable_if<std::is_arithmetic<T>::value &&
-                                      !std::is_same<T, bool>::value,
-                                  int>::type = 0>
-inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar,
-                                      std::vector<T, A> &vector)
-{
-    size_type size;
-    ar(size);
-    vector.resize(static_cast<std::size_t>(size));
-    ar(binary_data(vector.data(), static_cast<std::size_t>(size) * sizeof(T)));
-}
 
 template <class T>
 inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &, SizeTag<T> const &)

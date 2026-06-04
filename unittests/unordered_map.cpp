@@ -49,4 +49,10 @@ TEST_CASE("json_unordered_map")
   test_unordered_map<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_unordered_map")
+{
+  test_unordered_map<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

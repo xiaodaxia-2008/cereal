@@ -49,4 +49,10 @@ TEST_CASE("json_complex")
   test_complex<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_complex")
+{
+  test_complex<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

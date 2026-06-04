@@ -49,4 +49,10 @@ TEST_CASE("json_bitset")
   test_bitset<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_bitset")
+{
+  test_bitset<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

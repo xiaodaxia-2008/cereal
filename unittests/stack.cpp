@@ -49,4 +49,10 @@ TEST_CASE("json_stack")
   test_stack<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_stack")
+{
+  test_stack<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

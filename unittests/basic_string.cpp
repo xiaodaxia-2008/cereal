@@ -49,6 +49,12 @@ TEST_CASE("json_string_basic")
   test_string_basic<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_string")
+{
+  test_string_all<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 template <class IArchive, class OArchive, class Out, class In = Out>
 void test_ws_in_out(Out const & o_value_with_ws)
 {
@@ -167,5 +173,4 @@ TEST_CASE("xml_string_issue_consecutive_calls")
 
     test_ws_in_out_array<cereal::XMLInputArchive, cereal::XMLOutputArchive>(strings);
 }
-
 TEST_SUITE_END();

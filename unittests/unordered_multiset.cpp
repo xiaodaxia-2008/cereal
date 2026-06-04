@@ -49,4 +49,10 @@ TEST_CASE("json_unordered_multiset")
   test_unordered_multiset<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_unordered_multiset")
+{
+  test_unordered_multiset<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

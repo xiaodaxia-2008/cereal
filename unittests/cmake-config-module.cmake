@@ -23,6 +23,7 @@ endif()
 execute_process(
   COMMAND ${CMAKE_COMMAND}
     --build ${BINARY_DIR}/cereal
+    --config ${CONFIG}
     --target install
   RESULT_VARIABLE result
 )
@@ -108,14 +109,19 @@ endif()
 execute_process(
   COMMAND ${CMAKE_COMMAND}
     --build ${BINARY_DIR}/test
+    --config ${CONFIG}
   RESULT_VARIABLE result
 )
 if(result)
   message(FATAL_ERROR "Test cmake build-step failed")
 endif()
 
+set(ctest_args)
+if(CONFIG)
+  list(APPEND ctest_args -C ${CONFIG})
+endif()
 execute_process(
-  COMMAND ${CMAKE_CTEST_COMMAND}
+  COMMAND ${CMAKE_CTEST_COMMAND} ${ctest_args}
   WORKING_DIRECTORY ${BINARY_DIR}/test
   RESULT_VARIABLE result
 )

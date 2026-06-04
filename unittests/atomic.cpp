@@ -49,4 +49,10 @@ TEST_CASE("json_atomic")
   test_atomic<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_atomic")
+{
+  test_atomic<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

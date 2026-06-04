@@ -49,4 +49,10 @@ TEST_CASE("json_valarray")
   test_valarray<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_valarray")
+{
+  test_valarray<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

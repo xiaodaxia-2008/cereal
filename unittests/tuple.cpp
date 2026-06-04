@@ -49,4 +49,10 @@ TEST_CASE("json_tuple")
   test_tuple<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_tuple")
+{
+  test_tuple<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

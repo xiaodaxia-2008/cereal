@@ -53,4 +53,11 @@ TEST_CASE("json_array")
   test_array<cereal::JSONInputArchive, cereal::JSONOutputArchive, 100>();
 }
 
+
+TEST_CASE("cbor_array")
+{
+  test_array<cereal::CborInputArchive, cereal::CborOutputArchive, 0>();
+  test_array<cereal::CborInputArchive, cereal::CborOutputArchive, 100>();
+}
+
 TEST_SUITE_END();

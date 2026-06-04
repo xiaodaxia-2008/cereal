@@ -49,4 +49,10 @@ TEST_CASE("json_vector")
   test_vector<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_vector")
+{
+  test_vector<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

@@ -49,4 +49,10 @@ TEST_CASE("json_unordered_multimap")
   test_unordered_multimap<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_unordered_multimap")
+{
+  test_unordered_multimap<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

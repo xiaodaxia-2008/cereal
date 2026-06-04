@@ -71,4 +71,10 @@ TEST_CASE("json_versioning_threading")
 }
 #endif // CEREAL_THREAD_SAFE
 
+
+TEST_CASE("cbor_versioning")
+{
+  test_versioning<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

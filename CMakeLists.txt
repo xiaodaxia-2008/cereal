@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.6...3.15)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_CXX_STANDARD 20)
 
 project(cereal LANGUAGES CXX VERSION 1.3.2)
 
@@ -23,7 +24,7 @@ endif()
 option(BUILD_DOC "Build documentation" OFF)
 option(BUILD_SANDBOX "Build sandbox examples" OFF)
 option(BUILD_EXAMPLE "Build example" OFF)
-option(SKIP_PERFORMANCE_COMPARISON "Skip building performance sandbox comparison (requires boost)" OFF)
+option(SKIP_PERFORMANCE_COMPARISON "Skip building performance sandbox comparison (requires boost)" ON)
 
 # TODO: should not be needed! CK
 if(NOT CMAKE_VERSION VERSION_LESS 3.0) # installing cereal requires INTERFACE lib

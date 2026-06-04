@@ -49,4 +49,10 @@ TEST_CASE("json_dequeue")
   test_deque<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_deque")
+{
+  test_deque<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

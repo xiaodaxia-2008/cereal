@@ -48,4 +48,10 @@ TEST_CASE("json_pair")
   test_pair<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_pair")
+{
+  test_pair<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

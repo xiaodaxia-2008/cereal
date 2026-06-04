@@ -49,4 +49,10 @@ TEST_CASE("json_memory_cycles")
   test_memory_cycles<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_memory_cycles")
+{
+  test_memory_cycles<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

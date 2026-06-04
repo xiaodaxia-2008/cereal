@@ -49,4 +49,10 @@ TEST_CASE("json_structs_specialized")
   test_structs_specialized<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_structs_specialized")
+{
+  test_structs_specialized<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

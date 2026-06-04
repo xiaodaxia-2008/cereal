@@ -49,4 +49,10 @@ TEST_CASE("json_memory_load_construct")
   test_memory_load_construct<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_load_construct")
+{
+  test_memory_load_construct<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

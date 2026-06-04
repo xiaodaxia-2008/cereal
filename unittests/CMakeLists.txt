@@ -45,7 +45,7 @@ foreach(TEST_SOURCE ${TESTS})
 
     add_executable(${TEST_TARGET} ${TEST_SOURCE})
     target_link_libraries(${TEST_TARGET} ${CEREAL_THREAD_LIBS})
-    add_test(NAME "${TEST_TARGET}" COMMAND "${TEST_TARGET}")
+    add_test(NAME "${TEST_TARGET}" COMMAND "${TEST_TARGET}" --skip-benchmarks)
 
     # If we are on a 64-bit machine, create an extra 32-bit version of the test if portability testing is enabled
     if((NOT MSVC) AND (${CMAKE_SIZEOF_VOID_P} EQUAL 8) AND (NOT SKIP_PORTABILITY_TEST))
@@ -53,7 +53,7 @@ foreach(TEST_SOURCE ${TESTS})
       set_target_properties(${TEST_TARGET}_32 PROPERTIES
         COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
       target_link_libraries(${TEST_TARGET}_32 ${CEREAL_THREAD_LIBS})
-      add_test(NAME "${TEST_TARGET}_32" COMMAND "${TEST_TARGET}_32")
+      add_test(NAME "${TEST_TARGET}_32" COMMAND "${TEST_TARGET}_32" --skip-benchmarks)
     endif()
 
   endif()
@@ -100,5 +100,5 @@ if(Boost_FOUND)
 endif()
 
 if(NOT CMAKE_VERSION VERSION_LESS 3.0)
-  add_test(NAME test_cmake_config_module COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake-config-module.cmake)
+  add_test(NAME test_cmake_config_module COMMAND ${CMAKE_COMMAND} -DCONFIG=$<CONFIG> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake-config-module.cmake)
 endif()

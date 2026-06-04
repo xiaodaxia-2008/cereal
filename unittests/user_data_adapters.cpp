@@ -49,4 +49,10 @@ TEST_CASE("json_user_data_adapters")
   test_user_data_adapters<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_user_data_adapters")
+{
+  test_user_data_adapters<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();

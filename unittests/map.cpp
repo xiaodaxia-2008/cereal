@@ -69,4 +69,10 @@ TEST_CASE("json_map_memory")
   test_map_memory<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
 }
 
+
+TEST_CASE("cbor_map")
+{
+  test_map<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 TEST_SUITE_END();
