@@ -896,7 +896,7 @@ class CborInputArchive : public InputArchive<CborInputArchive>
 {
 public:
     CborInputArchive(std::istream &stream)
-        : InputArchive<CborInputArchive>(this), itsNextName(nullptr)
+        : InputArchive<CborInputArchive>(this), itsNextName(nullptr), itsKeyNotFound(false)
     {
         std::string buffer(std::istreambuf_iterator<char>(stream), {});
         itsRoot = detail::parseCbor(buffer);
@@ -911,12 +911,29 @@ public:
 
     ~CborInputArchive() CEREAL_NOEXCEPT = default;
 
+    //! Returns true if the given key exists in the current CBOR map node.
+    //! Used to implement ignore-missing-key behaviour for NVPs.
+    bool hasName(const char *name) const
+    {
+        if (name && !itsIteratorStack.empty()) {
+            auto const actualName = itsIteratorStack.back().name();
+            if (actualName && std::strcmp(name, actualName) == 0)
+                return true;
+            return itsIteratorStack.back().hasName(name);
+        }
+        return false;
+    }
+
     void loadBinaryValue(void *data, size_t size, const char *name = nullptr)
     {
         if (name) {
             itsNextName = name;
         }
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
 
         auto &val = itsIteratorStack.back().value();
         if (val.type != detail::CborNode::Bytes) {
@@ -942,12 +959,16 @@ public:
         {
         };
 
-        Iterator() : itsParent(nullptr), itsIndex(0), itsSize(0)
+        struct MissingTag
+        {
+        };
+
+        Iterator() : itsParent(nullptr), itsIndex(0), itsSize(0), itsIsMissing(false)
         {
         }
 
         Iterator(detail::CborNode *parent, ObjectTag)
-            : itsParent(parent), itsIndex(0)
+            : itsParent(parent), itsIndex(0), itsIsMissing(false)
         {
             if (parent->type == detail::CborNode::Map) {
                 itsKeys.reserve(parent->obj.size());
@@ -959,21 +980,43 @@ public:
         }
 
         Iterator(detail::CborNode *parent, ArrayTag)
-            : itsParent(parent), itsIndex(0)
+            : itsParent(parent), itsIndex(0), itsIsMissing(false)
         {
             if (parent->type == detail::CborNode::Array) {
                 itsSize = parent->arr.size();
             }
         }
 
+        Iterator(std::nullptr_t, MissingTag)
+            : itsParent(nullptr), itsIndex(0), itsSize(0), itsIsMissing(true)
+        {
+        }
+
+        bool isMissing() const
+        {
+            return itsIsMissing;
+        }
+
+        size_t size() const
+        {
+            return itsSize;
+        }
+
         Iterator &operator++()
         {
+            if (itsIsMissing) {
+                return *this;
+            }
             ++itsIndex;
             return *this;
         }
 
         const detail::CborNode &value() const
         {
+            if (itsIsMissing) {
+                static const detail::CborNode dummyNode;
+                return dummyNode;
+            }
             if (itsIndex >= itsSize) {
                 throw Exception("No more objects in CBOR input");
             }
@@ -988,6 +1031,10 @@ public:
 
         detail::CborNode &mutableValue()
         {
+            if (itsIsMissing) {
+                static detail::CborNode dummyNode;
+                return dummyNode;
+            }
             if (itsIndex >= itsSize) {
                 throw Exception("No more objects in CBOR input");
             }
@@ -1002,6 +1049,9 @@ public:
 
         const char *name() const
         {
+            if (itsIsMissing) {
+                return nullptr;
+            }
             if (itsParent->type == detail::CborNode::Map &&
                 itsIndex < itsKeys.size())
             {
@@ -1010,8 +1060,11 @@ public:
             return nullptr;
         }
 
-        inline void search(const char *searchName)
+        inline bool search(const char *searchName)
         {
+            if (itsIsMissing) {
+                return false;
+            }
             if (itsParent->type == detail::CborNode::Map) {
                 const auto len = std::strlen(searchName);
                 for (size_t i = 0; i < itsKeys.size(); ++i) {
@@ -1020,16 +1073,18 @@ public:
                         std::strncmp(searchName, key.data(), len) == 0)
                     {
                         itsIndex = i;
-                        return;
+                        return true;
                     }
                 }
             }
-            throw Exception("CBOR Parsing failed - provided NVP (" +
-                            std::string(searchName) + ") not found");
+            return false;
         }
 
         inline bool hasName(const char *searchName) const
         {
+            if (itsIsMissing) {
+                return false;
+            }
             if (itsParent->type == detail::CborNode::Map) {
                 const auto len = std::strlen(searchName);
                 for (const auto &key : itsKeys) {
@@ -1048,10 +1103,17 @@ public:
         std::vector<std::string> itsKeys;
         size_t itsIndex;
         size_t itsSize;
+        bool itsIsMissing;
     };
 
     inline void search()
     {
+        if (itsIteratorStack.back().isMissing()) {
+            itsKeyNotFound = true;
+            itsNextName = nullptr;
+            return;
+        }
+
         auto localNextName = itsNextName;
         itsNextName = nullptr;
 
@@ -1059,7 +1121,9 @@ public:
             auto const actualName = itsIteratorStack.back().name();
 
             if (!actualName || std::strcmp(localNextName, actualName) != 0) {
-                itsIteratorStack.back().search(localNextName);
+                if (!itsIteratorStack.back().search(localNextName)) {
+                    itsKeyNotFound = true;
+                }
             }
         }
     }
@@ -1067,6 +1131,12 @@ public:
     void startNode()
     {
         search();
+
+        if (itsKeyNotFound) {
+            itsIteratorStack.emplace_back(nullptr, Iterator::MissingTag{});
+            itsKeyNotFound = false;
+            return;
+        }
 
         auto &current = itsIteratorStack.back().mutableValue();
         if (current.type == detail::CborNode::Array) {
@@ -1079,8 +1149,11 @@ public:
 
     void finishNode()
     {
+        bool wasMissing = itsIteratorStack.back().isMissing();
         itsIteratorStack.pop_back();
-        ++itsIteratorStack.back();
+        if (!wasMissing) {
+            ++itsIteratorStack.back();
+        }
     }
 
     const char *getNodeName() const
@@ -1099,6 +1172,10 @@ public:
     inline void loadValue(T &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = static_cast<T>(readNumber());
         ++itsIteratorStack.back();
     }
@@ -1110,6 +1187,10 @@ public:
     inline void loadValue(T &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = static_cast<T>(readNumber());
         ++itsIteratorStack.back();
     }
@@ -1117,6 +1198,10 @@ public:
     void loadValue(bool &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         auto &v = itsIteratorStack.back().value();
         if (v.type != detail::CborNode::Bool) {
             throw Exception("Expected boolean in CBOR");
@@ -1128,6 +1213,10 @@ public:
     void loadValue(int64_t &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = readInt();
         ++itsIteratorStack.back();
     }
@@ -1135,6 +1224,10 @@ public:
     void loadValue(uint64_t &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = readUint();
         ++itsIteratorStack.back();
     }
@@ -1142,6 +1235,10 @@ public:
     void loadValue(float &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = static_cast<float>(readNumber());
         ++itsIteratorStack.back();
     }
@@ -1149,6 +1246,10 @@ public:
     void loadValue(double &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = readNumber();
         ++itsIteratorStack.back();
     }
@@ -1156,6 +1257,10 @@ public:
     void loadValue(std::string &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         auto &v = itsIteratorStack.back().value();
         if (v.type != detail::CborNode::Text) {
             throw Exception("Expected string in CBOR");
@@ -1169,6 +1274,10 @@ public:
     void loadValue(std::basic_string<CharT, Traits, Alloc> &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         auto &v = itsIteratorStack.back().value();
         if (v.type != detail::CborNode::Bytes) {
             throw Exception("Expected CBOR byte string for wide string");
@@ -1183,6 +1292,10 @@ public:
     void loadValue(std::nullptr_t &)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         if (!itsIteratorStack.back().value().isNull()) {
             throw Exception("Expected null value in CBOR");
         }
@@ -1196,6 +1309,10 @@ public:
     loadValue(T &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = static_cast<T>(readInt());
         ++itsIteratorStack.back();
     }
@@ -1208,6 +1325,10 @@ public:
         loadValue(T &val)
     {
         search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         val = static_cast<T>(readUint());
         ++itsIteratorStack.back();
     }
@@ -1354,6 +1475,11 @@ public:
                    sizeof(T) >= sizeof(long long))> = traits::sfinae>
     inline void loadValue(T &val)
     {
+        search();
+        if (itsKeyNotFound) {
+            itsKeyNotFound = false;
+            return;
+        }
         std::string encoded;
         loadValue(encoded);
         stringToNumber(encoded, val);
@@ -1361,26 +1487,18 @@ public:
 
     void loadSize(size_type &size)
     {
-        if (itsIteratorStack.size() == 1) {
-            size = itsRoot.type == detail::CborNode::Array ? itsRoot.arr.size()
-                   : itsRoot.type == detail::CborNode::Map
-                       ? itsRoot.obj.size()
-                       : static_cast<size_type>(0);
+        if (itsIteratorStack.back().isMissing()) {
+            size = 0;
+            return;
         }
-        else {
-            auto &parent =
-                itsIteratorStack[itsIteratorStack.size() - 2].value();
-            size = parent.type == detail::CborNode::Array ? parent.arr.size()
-                   : parent.type == detail::CborNode::Map
-                       ? parent.obj.size()
-                       : static_cast<size_type>(0);
-        }
+        size = static_cast<size_type>(itsIteratorStack.back().size());
     }
 
 private:
     const char *itsNextName;
     detail::CborNode itsRoot;
     std::vector<Iterator> itsIteratorStack;
+    bool itsKeyNotFound;
 };
 
 // ============================================================================
@@ -1578,6 +1696,9 @@ inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar,
 template <class T>
 inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar, NameValuePair<T> &t)
 {
+    // Skip completely when the key is absent - leave t.value untouched.
+    if (!ar.hasName(t.name))
+        return;
     ar.setNextName(t.name);
     ar(t.value);
 }
