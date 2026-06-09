@@ -92,6 +92,58 @@ void serialize(Archive& ar, NonMemberSerializeAggregate& v)
     ar(cereal::make_nvp("a", v.a), cereal::make_nvp("b", v.b));
 }
 
+// An aggregate that uses free save/load split -- PFR should NOT interfere
+struct FreeSaveLoadAggregate
+{
+    int a, b;
+    std::string s;
+
+    bool operator==(const FreeSaveLoadAggregate& other) const
+    {
+        return a == other.a && b == other.b && s == other.s;
+    }
+};
+
+template <class Archive>
+void save(Archive& ar, const FreeSaveLoadAggregate& v)
+{
+    ar(cereal::make_nvp("a", v.a), cereal::make_nvp("b", v.b), cereal::make_nvp("s", v.s));
+}
+
+template <class Archive>
+void load(Archive& ar, FreeSaveLoadAggregate& v)
+{
+    ar(cereal::make_nvp("a", v.a), cereal::make_nvp("b", v.b), cereal::make_nvp("s", v.s));
+}
+
+// An aggregate that uses free save_minimal/load_minimal split -- PFR should NOT interfere
+struct FreeSaveLoadMinimalAggregate
+{
+    int a, b;
+    std::string s;
+
+    bool operator==(const FreeSaveLoadMinimalAggregate& other) const
+    {
+        return a == other.a && b == other.b && s == other.s;
+    }
+};
+
+template <class Archive>
+std::string save_minimal(Archive const&, FreeSaveLoadMinimalAggregate const& v)
+{
+    return std::to_string(v.a) + "," + std::to_string(v.b) + "," + v.s;
+}
+
+template <class Archive>
+void load_minimal(Archive const&, FreeSaveLoadMinimalAggregate& v, std::string const& s)
+{
+    auto p1 = s.find(',');
+    auto p2 = s.find(',', p1 == std::string::npos ? 0 : p1 + 1);
+    v.a = std::stoi(s.substr(0, p1));
+    v.b = std::stoi(s.substr(p1 + 1, p2 - p1 - 1));
+    v.s = s.substr(p2 + 1);
+}
+
 std::ostream& operator<<(std::ostream& os, const SimpleAggregate& s)
 {
     os << "[" << s.x << ", " << s.y << ", " << s.name << ", " << s.flag << "]";
@@ -113,6 +165,18 @@ std::ostream& operator<<(std::ostream& os, const OwnSerializeAggregate& o)
 std::ostream& operator<<(std::ostream& os, const NonMemberSerializeAggregate& o)
 {
     os << "[" << o.a << ", " << o.b << "]";
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const FreeSaveLoadAggregate& o)
+{
+    os << "[" << o.a << ", " << o.b << ", " << o.s << "]";
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const FreeSaveLoadMinimalAggregate& o)
+{
+    os << "[" << o.a << ", " << o.b << ", " << o.s << "]";
     return os;
 }
 
@@ -263,6 +327,66 @@ void test_pfr_no_interference_non_member()
     }
 }
 
+template <class IArchive, class OArchive>
+void test_pfr_no_interference_free_save_load()
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    for (int ii = 0; ii < 100; ++ii)
+    {
+        FreeSaveLoadAggregate o_data = {
+            random_value<int>(gen), random_value<int>(gen),
+            random_value<std::string>(gen)
+        };
+
+        std::ostringstream os;
+        {
+            OArchive oar(os);
+            oar(o_data);
+        }
+
+        FreeSaveLoadAggregate i_data = {};
+        std::istringstream is(os.str());
+        {
+            IArchive iar(is);
+            iar(i_data);
+        }
+
+        CHECK_EQ(i_data, o_data);
+    }
+}
+
+template <class IArchive, class OArchive>
+void test_pfr_no_interference_free_save_load_minimal()
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    for (int ii = 0; ii < 100; ++ii)
+    {
+        FreeSaveLoadMinimalAggregate o_data = {
+            random_value<int>(gen), random_value<int>(gen),
+            random_value<std::string>(gen)
+        };
+
+        std::ostringstream os;
+        {
+            OArchive oar(os);
+            oar(o_data);
+        }
+
+        FreeSaveLoadMinimalAggregate i_data = {};
+        std::istringstream is(os.str());
+        {
+            IArchive iar(is);
+            iar(i_data);
+        }
+
+        CHECK_EQ(i_data, o_data);
+    }
+}
+
 TEST_SUITE_BEGIN("pfr");
 
 TEST_CASE("binary_pfr_simple")
@@ -348,6 +472,36 @@ TEST_CASE("json_pfr_no_interference_non_member")
 TEST_CASE("cbor_pfr_no_interference_non_member")
 {
     test_pfr_no_interference_non_member<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
+TEST_CASE("binary_pfr_no_interference_free_save_load")
+{
+    test_pfr_no_interference_free_save_load<cereal::BinaryInputArchive, cereal::BinaryOutputArchive>();
+}
+
+TEST_CASE("json_pfr_no_interference_free_save_load")
+{
+    test_pfr_no_interference_free_save_load<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
+}
+
+TEST_CASE("cbor_pfr_no_interference_free_save_load")
+{
+    test_pfr_no_interference_free_save_load<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
+TEST_CASE("binary_pfr_no_interference_free_save_load_minimal")
+{
+    test_pfr_no_interference_free_save_load_minimal<cereal::BinaryInputArchive, cereal::BinaryOutputArchive>();
+}
+
+TEST_CASE("json_pfr_no_interference_free_save_load_minimal")
+{
+    test_pfr_no_interference_free_save_load_minimal<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
+}
+
+TEST_CASE("cbor_pfr_no_interference_free_save_load_minimal")
+{
+    test_pfr_no_interference_free_save_load_minimal<cereal::CborInputArchive, cereal::CborOutputArchive>();
 }
 
 TEST_SUITE_END();

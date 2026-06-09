@@ -35,6 +35,7 @@
 #include "cereal/cereal.hpp"
 
 #include <boost/pfr.hpp>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
@@ -43,16 +44,83 @@ namespace cereal
 namespace pfr_detail
 {
 
-//! Detect whether a non-member `serialize(Archive&, T&)` exists in T's namespace
-//! (i.e. a user-provided ADL serialize) WITHOUT picking up cereal's own
-//! PFR-namespaced `serialize`.  We perform the lookup from this dedicated
-//! namespace via ADL on T only; cereal::serialize is invisible here.
+//! All five non-member cereal dispatch names, with and without a version
+//! argument.  Each is detected via ADL from this dedicated namespace so that
+//! cereal's own PFR `serialize` overload (defined in namespace cereal) is
+//! invisible to the lookup.  This is necessary to avoid both:
+//!   1. PFR silently shadowing a user-provided free function
+//!   2. Infinite recursion when PFR's SFINAE itself consults a trait that
+//!      also looks up the same name (cereal's traits::has_non_member_* look
+//!      up the same names from cereal::detail, which does see cereal::*).
+
 template <class Archive, class T, class = void>
 struct has_non_member_serialize : std::false_type {};
-
 template <class Archive, class T>
 struct has_non_member_serialize<Archive, T,
     std::void_t<decltype(serialize(std::declval<Archive&>(), std::declval<T&>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_versioned_serialize : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_versioned_serialize<Archive, T,
+    std::void_t<decltype(serialize(std::declval<Archive&>(), std::declval<T&>(), std::declval<std::uint32_t>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_save : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_save<Archive, T,
+    std::void_t<decltype(save(std::declval<Archive&>(), std::declval<T const&>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_versioned_save : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_versioned_save<Archive, T,
+    std::void_t<decltype(save(std::declval<Archive&>(), std::declval<T const&>(), std::declval<std::uint32_t>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_load : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_load<Archive, T,
+    std::void_t<decltype(load(std::declval<Archive&>(), std::declval<T&>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_versioned_load : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_versioned_load<Archive, T,
+    std::void_t<decltype(load(std::declval<Archive&>(), std::declval<T&>(), std::declval<std::uint32_t>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_save_minimal : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_save_minimal<Archive, T,
+    std::void_t<decltype(save_minimal(std::declval<Archive const&>(), std::declval<T const&>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_versioned_save_minimal : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_versioned_save_minimal<Archive, T,
+    std::void_t<decltype(save_minimal(std::declval<Archive const&>(), std::declval<T const&>(), std::declval<std::uint32_t>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_load_minimal : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_load_minimal<Archive, T,
+    std::void_t<decltype(load_minimal(std::declval<Archive const&>(), std::declval<T&>(), std::declval<int>()))>>
+    : std::true_type {};
+
+template <class Archive, class T, class = void>
+struct has_non_member_versioned_load_minimal : std::false_type {};
+template <class Archive, class T>
+struct has_non_member_versioned_load_minimal<Archive, T,
+    std::void_t<decltype(load_minimal(std::declval<Archive const&>(), std::declval<T&>(), std::declval<int>(), std::declval<std::uint32_t>()))>>
     : std::true_type {};
 
 } // namespace pfr_detail
@@ -72,6 +140,13 @@ struct has_non_member_serialize<Archive, T,
     - The type does NOT already have a member serialize, save, or load function
     - The type does NOT already have a non-member (ADL) serialize function --
       this prevents PFR from silently shadowing a user-defined free serialize
+    - The type does NOT already have a non-member (ADL) save/load or
+      save_minimal/load_minimal (versioned or not) -- these would otherwise
+      be silently shadowed by PFR's combined serialize.  All ten non-member
+      detectors live in pfr_detail (rather than reusing cereal::traits) so
+      the lookups are not polluted by PFR's own `serialize` overload, and so
+      they don't trigger downstream trait instantiations that themselves
+      depend on `serialize` and could recurse.
 
     Usage:
     @code{.cpp}
@@ -92,7 +167,16 @@ template <class Archive, class T,
               !traits::has_member_serialize<T, Archive>::value,
               !traits::has_member_save<T, Archive>::value,
               !traits::has_member_load<T, Archive>::value,
-              !pfr_detail::has_non_member_serialize<Archive, T>::value
+              !pfr_detail::has_non_member_serialize<Archive, T>::value,
+              !pfr_detail::has_non_member_save<Archive, T>::value,
+              !pfr_detail::has_non_member_load<Archive, T>::value,
+              !pfr_detail::has_non_member_save_minimal<Archive, T>::value,
+              !pfr_detail::has_non_member_load_minimal<Archive, T>::value,
+              !pfr_detail::has_non_member_versioned_serialize<Archive, T>::value,
+              !pfr_detail::has_non_member_versioned_save<Archive, T>::value,
+              !pfr_detail::has_non_member_versioned_load<Archive, T>::value,
+              !pfr_detail::has_non_member_versioned_save_minimal<Archive, T>::value,
+              !pfr_detail::has_non_member_versioned_load_minimal<Archive, T>::value
           > = traits::sfinae>
 auto CEREAL_SERIALIZE_FUNCTION_NAME(Archive& ar, T& t)
     -> decltype(
