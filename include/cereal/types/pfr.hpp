@@ -40,6 +40,22 @@
 
 namespace cereal
 {
+namespace pfr_detail
+{
+
+//! Detect whether a non-member `serialize(Archive&, T&)` exists in T's namespace
+//! (i.e. a user-provided ADL serialize) WITHOUT picking up cereal's own
+//! PFR-namespaced `serialize`.  We perform the lookup from this dedicated
+//! namespace via ADL on T only; cereal::serialize is invisible here.
+template <class Archive, class T, class = void>
+struct has_non_member_serialize : std::false_type {};
+
+template <class Archive, class T>
+struct has_non_member_serialize<Archive, T,
+    std::void_t<decltype(serialize(std::declval<Archive&>(), std::declval<T&>()))>>
+    : std::true_type {};
+
+} // namespace pfr_detail
 
 //! Serialization for aggregate types using Boost.PFR
 /*! This provides automatic serialization for any aggregate type (a struct
@@ -54,6 +70,8 @@ namespace cereal
     - The type is not a fundamental/arithmetic type
     - Boost.PFR can iterate its fields (verified via expression SFINAE)
     - The type does NOT already have a member serialize, save, or load function
+    - The type does NOT already have a non-member (ADL) serialize function --
+      this prevents PFR from silently shadowing a user-defined free serialize
 
     Usage:
     @code{.cpp}
@@ -73,7 +91,8 @@ template <class Archive, class T,
               !std::is_fundamental_v<T>,
               !traits::has_member_serialize<T, Archive>::value,
               !traits::has_member_save<T, Archive>::value,
-              !traits::has_member_load<T, Archive>::value
+              !traits::has_member_load<T, Archive>::value,
+              !pfr_detail::has_non_member_serialize<Archive, T>::value
           > = traits::sfinae>
 auto CEREAL_SERIALIZE_FUNCTION_NAME(Archive& ar, T& t)
     -> decltype(

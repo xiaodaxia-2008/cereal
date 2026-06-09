@@ -75,6 +75,23 @@ struct OwnSerializeAggregate
     }
 };
 
+// An aggregate that has a non-member (ADL) serialize -- PFR should NOT interfere
+struct NonMemberSerializeAggregate
+{
+    int a, b;
+
+    bool operator==(const NonMemberSerializeAggregate& other) const
+    {
+        return a == other.a && b == other.b;
+    }
+};
+
+template <class Archive>
+void serialize(Archive& ar, NonMemberSerializeAggregate& v)
+{
+    ar(cereal::make_nvp("a", v.a), cereal::make_nvp("b", v.b));
+}
+
 std::ostream& operator<<(std::ostream& os, const SimpleAggregate& s)
 {
     os << "[" << s.x << ", " << s.y << ", " << s.name << ", " << s.flag << "]";
@@ -88,6 +105,12 @@ std::ostream& operator<<(std::ostream& os, const NestedAggregate& n)
 }
 
 std::ostream& operator<<(std::ostream& os, const OwnSerializeAggregate& o)
+{
+    os << "[" << o.a << ", " << o.b << "]";
+    return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const NonMemberSerializeAggregate& o)
 {
     os << "[" << o.a << ", " << o.b << "]";
     return os;
@@ -211,6 +234,35 @@ void test_pfr_no_interference()
     }
 }
 
+template <class IArchive, class OArchive>
+void test_pfr_no_interference_non_member()
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    for (int ii = 0; ii < 100; ++ii)
+    {
+        NonMemberSerializeAggregate o_data = {
+            random_value<int>(gen), random_value<int>(gen)
+        };
+
+        std::ostringstream os;
+        {
+            OArchive oar(os);
+            oar(o_data);
+        }
+
+        NonMemberSerializeAggregate i_data = {};
+        std::istringstream is(os.str());
+        {
+            IArchive iar(is);
+            iar(i_data);
+        }
+
+        CHECK_EQ(i_data, o_data);
+    }
+}
+
 TEST_SUITE_BEGIN("pfr");
 
 TEST_CASE("binary_pfr_simple")
@@ -281,6 +333,21 @@ TEST_CASE("json_pfr_no_interference")
 TEST_CASE("cbor_pfr_no_interference")
 {
     test_pfr_no_interference<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
+TEST_CASE("binary_pfr_no_interference_non_member")
+{
+    test_pfr_no_interference_non_member<cereal::BinaryInputArchive, cereal::BinaryOutputArchive>();
+}
+
+TEST_CASE("json_pfr_no_interference_non_member")
+{
+    test_pfr_no_interference_non_member<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
+}
+
+TEST_CASE("cbor_pfr_no_interference_non_member")
+{
+    test_pfr_no_interference_non_member<cereal::CborInputArchive, cereal::CborOutputArchive>();
 }
 
 TEST_SUITE_END();
