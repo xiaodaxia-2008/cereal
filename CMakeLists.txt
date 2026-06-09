@@ -25,6 +25,7 @@ option(BUILD_DOC "Build documentation" OFF)
 option(BUILD_SANDBOX "Build sandbox examples" OFF)
 option(BUILD_EXAMPLE "Build example" OFF)
 option(SKIP_PERFORMANCE_COMPARISON "Skip building performance sandbox comparison (requires boost)" ON)
+option(CEREAL_USE_BOOST_PFR "Use Boost.PFR for automatic aggregate serialization" OFF)
 
 # TODO: should not be needed! CK
 if(NOT CMAKE_VERSION VERSION_LESS 3.0) # installing cereal requires INTERFACE lib
@@ -44,7 +45,7 @@ if(UNIX)
 endif()
 
 if(MSVC)
-    add_compile_options(/bigobj /W3 /WX /Zc:preprocessor)
+    add_compile_options(/bigobj /W3 /WX /Zc:preprocessor /utf-8)
 else()
     add_compile_options(-Wall -Wextra -pedantic -Wshadow -Wold-style-cast)
     option(WITH_WERROR "Compile with '-Werror' C++ compiler flag" ON)
@@ -80,6 +81,12 @@ list(APPEND CEREAL_THREAD_LIBS cereal::cereal)
 
 if(NOT CMAKE_VERSION VERSION_LESS 3.8)
     target_compile_features(cereal PUBLIC cxx_std_20)
+endif()
+
+if(CEREAL_USE_BOOST_PFR)
+    find_package(Boost REQUIRED COMPONENTS pfr)
+    target_compile_definitions(cereal PUBLIC CEREAL_USE_BOOST_PFR)
+    target_link_libraries(cereal PUBLIC Boost::pfr)
 endif()
 
 option(CEREAL_INSTALL "Generate the install target" ${CEREAL_MASTER_PROJECT})

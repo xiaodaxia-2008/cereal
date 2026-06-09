@@ -485,6 +485,17 @@ public:
 
   ~JSONInputArchive() CEREAL_NOEXCEPT = default;
 
+  //! Configures how missing keys are handled during deserialization.
+  /*! When set to true, keys present in the serialized type but missing
+      from the JSON input will be silently ignored (the corresponding
+      member keeps its default value). When false (the default), a missing
+      key throws a cereal::Exception.
+      @param ignore If true, silently skip missing keys */
+  void setIgnoreMissingKeys(bool ignore) { m_ignoreMissingKeys = ignore; }
+
+  //! Returns the current "ignore missing keys" policy.
+  bool shouldIgnoreMissingKeys() const { return m_ignoreMissingKeys; }
+
   //! Loads some binary data, encoded as a base64 string
   /*! This will automatically start and finish a node to load the data, and can
      be called directly by users.
@@ -493,6 +504,13 @@ public:
      description in regards to loading in/out of order */
   void loadBinaryValue(void *data, size_t size, const char *name = nullptr) {
     itsNextName = name;
+
+    search();
+    if (itsKeyNotFound) {
+      itsKeyNotFound = false;
+      itsNextName = nullptr;
+      return;
+    }
 
     std::string encoded;
     loadValue(encoded);
@@ -534,7 +552,7 @@ private:
       rapidJSON supports - one for arrays and one for objects. */
   class Iterator {
   public:
-    Iterator() : itsIndex(0), itsType(Null_) {}
+    Iterator() : itsIndex(0), itsType(Missing) {}
 
     Iterator(MemberIterator begin, MemberIterator end)
         : itsMemberItBegin(begin), itsMemberItEnd(end), itsIndex(0),
@@ -581,8 +599,8 @@ private:
     }
 
     //! Adjust our position such that we are at the node with the given name
-    /*! @throws Exception if no such named node exists */
-    inline void search(const char *searchName) {
+    /*! @return true if the name was found, false otherwise */
+    inline bool search(const char *searchName) {
       const auto len = std::strlen(searchName);
       size_t index = 0;
       for (auto it = itsMemberItBegin; it != itsMemberItEnd; ++it, ++index) {
@@ -590,12 +608,11 @@ private:
         if ((std::strncmp(searchName, currentName, len) == 0) &&
             (std::strlen(currentName) == len)) {
           itsIndex = index;
-          return;
+          return true;
         }
       }
 
-      throw Exception("JSON Parsing failed - provided NVP (" +
-                      std::string(searchName) + ") not found");
+      return false;
     }
 
     inline bool hasName(const char *searchName) {
@@ -610,6 +627,9 @@ private:
       return false;
     }
 
+    //! Returns true if this is a missing-key placeholder iterator
+    bool isMissing() const { return itsType == Missing; }
+
   private:
     MemberIterator itsMemberItBegin,
         itsMemberItEnd;            //!< The member iterator (object)
@@ -618,9 +638,9 @@ private:
     enum Type {
       Value,
       Member,
-      Null_
-    } itsType; //!< Whether this holds values (array) or members (objects) or
-               //!< nothing
+      Null_,
+      Missing  //!< Placeholder for a key that was not found
+    } itsType; //!< Whether this holds values (array) or members (objects) or nothing
   };
 
   //! Searches for the expectedName node if it doesn't match the actualName
@@ -634,6 +654,13 @@ private:
 
       @throws Exception if an expectedName is given and not found */
   inline void search() {
+    // If currently inside a missing key's subtree, propagate the ignorable state
+    if (itsIteratorStack.back().isMissing()) {
+      itsKeyNotFound = true;
+      itsNextName = nullptr;
+      return;
+    }
+
     // store pointer to itsNextName locally and reset to nullptr in case
     // search() throws
     auto localNextName = itsNextName;
@@ -646,8 +673,15 @@ private:
 
       // Do a search if we don't see a name coming up, or if the names don't
       // match
-      if (!actualName || std::strcmp(localNextName, actualName) != 0)
-        itsIteratorStack.back().search(localNextName);
+      if (!actualName || std::strcmp(localNextName, actualName) != 0) {
+        if (!itsIteratorStack.back().search(localNextName)) {
+          if (m_ignoreMissingKeys)
+            itsKeyNotFound = true;
+          else
+            throw Exception("JSON Parsing failed - provided NVP (" +
+                            std::string(localNextName) + ") not found");
+        }
+      }
     }
   }
 
@@ -668,13 +702,21 @@ public:
   void startNode() {
     search();
 
-    if (itsIteratorStack.back().value().IsArray())
-      itsIteratorStack.emplace_back(itsIteratorStack.back().value().Begin(),
-                                    itsIteratorStack.back().value().End());
+    if (itsKeyNotFound) {
+      itsKeyNotFound = false;
+      itsIteratorStack.emplace_back(); // Missing iterator to skip nested values
+      return;
+    }
+
+    auto& val = itsIteratorStack.back().value();
+    if (val.IsArray())
+      itsIteratorStack.emplace_back(val.Begin(), val.End());
+    else if (val.IsObject())
+      itsIteratorStack.emplace_back(val.MemberBegin(), val.MemberEnd());
     else
-      itsIteratorStack.emplace_back(
-          itsIteratorStack.back().value().MemberBegin(),
-          itsIteratorStack.back().value().MemberEnd());
+      // Scalar value in a Member context: reuse the same member range
+      // so that NVPs can still search among the siblings.
+      itsIteratorStack.emplace_back(itsIteratorStack.back()); // copy current iterator
   }
 
   //! Finishes the most recently started node
@@ -696,6 +738,7 @@ public:
                              sizeof(T) < sizeof(int64_t)> = traits::sfinae>
   inline void loadValue(T &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
 
     val = static_cast<T>(itsIteratorStack.back().value().GetInt());
     ++itsIteratorStack.back();
@@ -708,6 +751,7 @@ public:
                        !std::is_same<bool, T>::value> = traits::sfinae>
   inline void loadValue(T &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
 
     val = static_cast<T>(itsIteratorStack.back().value().GetUint());
     ++itsIteratorStack.back();
@@ -716,42 +760,49 @@ public:
   //! Loads a value from the current node - bool overload
   void loadValue(bool &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = itsIteratorStack.back().value().GetBool();
     ++itsIteratorStack.back();
   }
   //! Loads a value from the current node - int64 overload
   void loadValue(int64_t &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = itsIteratorStack.back().value().GetInt64();
     ++itsIteratorStack.back();
   }
   //! Loads a value from the current node - uint64 overload
   void loadValue(uint64_t &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = itsIteratorStack.back().value().GetUint64();
     ++itsIteratorStack.back();
   }
   //! Loads a value from the current node - float overload
   void loadValue(float &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = static_cast<float>(itsIteratorStack.back().value().GetDouble());
     ++itsIteratorStack.back();
   }
   //! Loads a value from the current node - double overload
   void loadValue(double &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = itsIteratorStack.back().value().GetDouble();
     ++itsIteratorStack.back();
   }
   //! Loads a value from the current node - string overload
   void loadValue(std::string &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = itsIteratorStack.back().value().GetString();
     ++itsIteratorStack.back();
   }
   //! Loads a nullptr from the current node
   void loadValue(std::nullptr_t &) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     CEREAL_RAPIDJSON_ASSERT(itsIteratorStack.back().value().IsNull());
     ++itsIteratorStack.back();
   }
@@ -762,6 +813,7 @@ public:
                                  void>::type
   loadValue(T &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = itsIteratorStack.back().value().GetInt64();
     ++itsIteratorStack.back();
   }
@@ -771,6 +823,7 @@ public:
                                  void>::type
   loadValue(T &val) {
     search();
+    if (itsKeyNotFound) { itsKeyNotFound = false; return; }
     val = itsIteratorStack.back().value().GetUint64();
     ++itsIteratorStack.back();
   }
@@ -883,6 +936,8 @@ private:
   ReadStream itsReadStream;               //!< Rapidjson write stream
   std::vector<Iterator> itsIteratorStack; //!< 'Stack' of rapidJSON iterators
   CEREAL_RAPIDJSON_NAMESPACE::Document itsDocument; //!< Rapidjson document
+  bool m_ignoreMissingKeys = false;       //!< If true, missing keys are silently skipped
+  bool itsKeyNotFound = false;            //!< Set to true when a searched-for key was not found
 };
 
 // ######################################################################
@@ -1090,6 +1145,8 @@ inline void CEREAL_SAVE_FUNCTION_NAME(JSONOutputArchive &ar,
 template <class T>
 inline void CEREAL_LOAD_FUNCTION_NAME(JSONInputArchive &ar,
                                       NameValuePair<T> &t) {
+  if (ar.shouldIgnoreMissingKeys() && !ar.hasName(t.name))
+    return;
   ar.setNextName(t.name);
   ar(t.value);
 }

@@ -916,6 +916,17 @@ public:
 
     ~CborInputArchive() CEREAL_NOEXCEPT = default;
 
+    //! Configures how missing keys are handled during deserialization.
+    /*! The default policy is to silently ignore keys present in the
+        serialized type but missing from the CBOR input (the corresponding
+        member keeps its default value). Pass @c false to make a missing key
+        throw a cereal::Exception instead.
+        @param ignore If true (the default), silently skip missing keys */
+    void setIgnoreMissingKeys(bool ignore) { m_ignoreMissingKeys = ignore; }
+
+    //! Returns the current "ignore missing keys" policy.
+    bool shouldIgnoreMissingKeys() const { return m_ignoreMissingKeys; }
+
     //! Returns true if the given key exists in the current CBOR map node.
     //! Used to implement ignore-missing-key behaviour for NVPs.
     bool hasName(const char *name) const
@@ -1132,7 +1143,11 @@ public:
 
             if (!actualName || std::strcmp(localNextName, actualName) != 0) {
                 if (!itsIteratorStack.back().search(localNextName)) {
-                    itsKeyNotFound = true;
+                    if (m_ignoreMissingKeys)
+                        itsKeyNotFound = true;
+                    else
+                        throw Exception("CBOR Parsing failed - provided NVP (" +
+                                        std::string(localNextName) + ") not found");
                 }
             }
         }
@@ -1509,6 +1524,7 @@ private:
     detail::CborNode itsRoot;
     std::vector<Iterator> itsIteratorStack;
     bool itsKeyNotFound;
+    bool m_ignoreMissingKeys = true;   //!< If true, silently skip missing keys (default preserves prior "ignore" semantics)
 };
 
 // ============================================================================
@@ -1731,8 +1747,10 @@ inline void CEREAL_SAVE_FUNCTION_NAME(CborOutputArchive &ar,
 template <class T>
 inline void CEREAL_LOAD_FUNCTION_NAME(CborInputArchive &ar, NameValuePair<T> &t)
 {
-    // Skip completely when the key is absent - leave t.value untouched.
-    if (!ar.hasName(t.name))
+    // Skip completely when ignoring missing keys and the key is absent -
+    // leave t.value untouched.  When the user has opted into throwing on
+    // missing keys, fall through and let search() raise.
+    if (ar.shouldIgnoreMissingKeys() && !ar.hasName(t.name))
         return;
     ar.setNextName(t.name);
     ar(t.value);
