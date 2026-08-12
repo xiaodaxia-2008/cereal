@@ -258,6 +258,13 @@ struct InputBindingMap {
     //! A map of serializers for pointers of all registered types
     std::map<std::string, Serializers> map;
 };
+
+//! A structure holding legacy polymorphic type names and their canonical names
+/*! Aliases are consulted only while loading.  Output archives continue to use
+    the canonical name supplied by binding_name<T>. */
+struct PolymorphicAliases {
+    std::map<std::string, std::string> map;
+};
 } // namespace detail
 
 } // namespace cereal

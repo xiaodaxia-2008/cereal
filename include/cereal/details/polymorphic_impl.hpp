@@ -374,6 +374,16 @@ namespace cereal
         {
         };
 
+        //! Registers a legacy input name for a polymorphic type
+        template <class T>
+        inline bool registerPolymorphicAlias(char const *alias)
+        {
+            auto &map = StaticObject<PolymorphicAliases>::getInstance().map;
+            auto lock = StaticObject<PolymorphicAliases>::lock();
+            map.insert({alias, binding_name<T>::name()});
+            return true;
+        }
+
         // forward decls for archives from cereal.hpp
         class InputArchiveBase;
         class OutputArchiveBase;

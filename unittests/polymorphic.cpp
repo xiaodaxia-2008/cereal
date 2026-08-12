@@ -55,6 +55,31 @@ TEST_CASE("cbor_polymorphic")
   test_polymorphic<cereal::CborInputArchive, cereal::CborOutputArchive>();
 }
 
+TEST_CASE("binary_polymorphic_alias")
+{
+  test_polymorphic_alias<cereal::BinaryInputArchive, cereal::BinaryOutputArchive>();
+}
+
+TEST_CASE("portable_binary_polymorphic_alias")
+{
+  test_polymorphic_alias<cereal::PortableBinaryInputArchive, cereal::PortableBinaryOutputArchive>();
+}
+
+TEST_CASE("xml_polymorphic_alias")
+{
+  test_polymorphic_alias<cereal::XMLInputArchive, cereal::XMLOutputArchive>();
+}
+
+TEST_CASE("json_polymorphic_alias")
+{
+  test_polymorphic_alias<cereal::JSONInputArchive, cereal::JSONOutputArchive>();
+}
+
+TEST_CASE("cbor_polymorphic_alias")
+{
+  test_polymorphic_alias<cereal::CborInputArchive, cereal::CborOutputArchive>();
+}
+
 #if CEREAL_THREAD_SAFE
 TEST_CASE("binary_polymorphic_threading")
 {

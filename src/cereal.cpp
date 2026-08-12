@@ -21,6 +21,8 @@ T &StaticObject<T>::createShared()
 
 template PolymorphicCasters &StaticObject<PolymorphicCasters>::createShared();
 
+template PolymorphicAliases &StaticObject<PolymorphicAliases>::createShared();
+
 template Versions &StaticObject<Versions>::createShared();
 
 template OutputBindingMap<BinaryOutputArchive> &

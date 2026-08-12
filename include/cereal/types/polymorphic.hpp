@@ -116,6 +116,23 @@
 #define CEREAL_REGISTER_TYPE_WITH_NAME(T, Name) \
   CEREAL_REGISTER_TYPE_WITH_NAME_TO_ARCHIVES(T, Name)
 
+//! Registers a legacy name accepted only when loading a polymorphic type
+/*! The type must first be registered with CEREAL_REGISTER_TYPE or
+    CEREAL_REGISTER_TYPE_WITH_NAME.  Saving always uses that registration's
+    canonical name.  This macro may be used multiple times for the same type. */
+#define CEREAL_REGISTER_TYPE_ALIAS_IMPL(T, Alias, Line)                    \
+  namespace                                                               \
+  {                                                                       \
+    const bool cereal_register_type_alias_##Line =                         \
+      ::cereal::detail::registerPolymorphicAlias<T>(Alias);                \
+  }
+
+#define CEREAL_REGISTER_TYPE_ALIAS_EXPAND(T, Alias, Line) \
+  CEREAL_REGISTER_TYPE_ALIAS_IMPL(T, Alias, Line)
+
+#define CEREAL_REGISTER_TYPE_ALIAS(T, Alias) \
+  CEREAL_REGISTER_TYPE_ALIAS_EXPAND(T, Alias, __COUNTER__)
+
 //! Registers the base-derived relationship for a polymorphic type
 /*! When polymorphic serialization occurs, cereal needs to know how to
     properly cast between derived and base types for the polymorphic
@@ -256,6 +273,14 @@ namespace cereal
           detail::StaticObject<detail::InputBindingMap<Archive>>::getInstance().map;
 
       auto binding = bindingMap.find(name);
+      if (binding == bindingMap.end())
+      {
+        auto const &aliases =
+            detail::StaticObject<detail::PolymorphicAliases>::getInstance().map;
+        auto alias = aliases.find(name);
+        if (alias != aliases.end())
+          binding = bindingMap.find(alias->second);
+      }
       if (binding == bindingMap.end())
         UNREGISTERED_POLYMORPHIC_EXCEPTION(load, name)
       return binding->second;

@@ -178,6 +178,32 @@ struct PolyDerived : PolyBase
 
 CEREAL_REGISTER_TYPE(PolyDerived)
 
+struct PolyAliasBase
+{
+  virtual ~PolyAliasBase() {}
+  virtual void foo() = 0;
+};
+
+struct PolyAliasNew : PolyAliasBase
+{
+  PolyAliasNew() = default;
+  explicit PolyAliasNew( int value ) : value( value ) {}
+
+  void foo() override {}
+
+  template <class Archive>
+  void serialize( Archive & ar )
+  {
+    ar( value );
+  }
+
+  int value = 0;
+};
+
+CEREAL_REGISTER_TYPE_WITH_NAME(PolyAliasNew, "PolyAliasNew")
+CEREAL_REGISTER_TYPE_ALIAS(PolyAliasNew, "PolyAliasOld")
+CEREAL_REGISTER_POLYMORPHIC_RELATION(PolyAliasBase, PolyAliasNew)
+
 struct PolyLA : std::enable_shared_from_this<PolyLA>
 {
   PolyLA() {}
@@ -629,6 +655,47 @@ CEREAL_REGISTER_TYPE(Derived)
 //CEREAL_TEST_CREATE_DERIVED_CLASS(Derived90,Derived97)
 //CEREAL_TEST_CREATE_DERIVED_CLASS(Derived97,Derived98)
 //CEREAL_TEST_CREATE_DERIVED_CLASS(Derived98,Derived99)
+
+template <class IArchive, class OArchive>
+void test_polymorphic_alias()
+{
+  std::stringstream canonicalStream;
+  {
+    OArchive oar( canonicalStream );
+    std::shared_ptr<PolyAliasBase> ptr = std::make_shared<PolyAliasNew>( 42 );
+    oar( ptr );
+  }
+
+  auto legacyData = canonicalStream.str();
+  std::string const canonicalName = "PolyAliasNew";
+  std::string const legacyName = "PolyAliasOld";
+  REQUIRE( canonicalName.size() == legacyName.size() );
+
+  auto const namePosition = legacyData.find( canonicalName );
+  REQUIRE( namePosition != std::string::npos );
+  legacyData.replace( namePosition, canonicalName.size(), legacyName );
+
+  std::shared_ptr<PolyAliasBase> loaded;
+  {
+    std::stringstream legacyStream( legacyData );
+    IArchive iar( legacyStream );
+    iar( loaded );
+  }
+
+  auto const loadedAlias = std::dynamic_pointer_cast<PolyAliasNew>( loaded );
+  REQUIRE( loadedAlias );
+  CHECK( loadedAlias->value == 42 );
+
+  std::stringstream resavedStream;
+  {
+    OArchive oar( resavedStream );
+    oar( loaded );
+  }
+
+  auto const resavedData = resavedStream.str();
+  CHECK( resavedData.find( canonicalName ) != std::string::npos );
+  CHECK( resavedData.find( legacyName ) == std::string::npos );
+}
 
 
 #endif // CEREAL_TEST_POLYMORPHIC_H_
